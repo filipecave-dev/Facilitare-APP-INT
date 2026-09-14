@@ -185,6 +185,13 @@ def _registrar(app: Flask) -> None:
             senha = request.form.get("senha", "")
             conta = repo.autenticar(username, senha)
             if conta is None:
+                usuarios = [u.username for u in repo.listar()]
+                print(
+                    "[Informativo] Login FALHOU para "
+                    f"username={username.strip().lower()!r} "
+                    f"(senha com {len(senha)} caracteres). "
+                    f"Usuários cadastrados: {usuarios}."
+                )
                 flash("Usuário ou senha inválidos.", "erro")
                 return redirect(url_for("login"))
             session["username"] = conta.username
