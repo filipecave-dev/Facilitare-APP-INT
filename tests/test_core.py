@@ -19,6 +19,34 @@ def db(tmp_path):
         yield conexao
 
 
+# -- camada de banco (portabilidade) ----------------------------------------
+def test_backend_sqlite_por_padrao(db):
+    assert db.backend == "sqlite"
+    # No SQLite os placeholders '?' não são traduzidos.
+    assert db._traduzir("SELECT ? , ?") == "SELECT ? , ?"
+
+
+def test_insert_retorna_id(db):
+    from informativo.fontes import FonteRepository
+
+    repo = FonteRepository(db)
+    f1 = repo.criar("A", "a.com")
+    f2 = repo.criar("B", "b.com")
+    assert isinstance(f1.id, int) and f2.id == f1.id + 1
+
+
+def test_traducao_placeholder_postgres(tmp_path, monkeypatch):
+    # Sem conectar a um Postgres real: valida só a tradução ?->%s.
+    import informativo.db as dbmod
+
+    class _FakeDB(dbmod.Database):
+        def __init__(self):  # não abre conexão
+            self.backend = "postgres"
+
+    fake = _FakeDB()
+    assert fake._traduzir("WHERE nome = ? AND id <> ?") == "WHERE nome = %s AND id <> %s"
+
+
 # -- senhas -----------------------------------------------------------------
 def test_hash_e_verificacao_de_senha():
     h = hash_senha("segredo123")

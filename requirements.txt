@@ -5,3 +5,5 @@ flask>=3.0
 werkzeug>=3.0
 # Servidor WSGI de produção (usado no Render).
 gunicorn>=21.2
+# Driver PostgreSQL (usado quando INFORMATIVO_DSN aponta para postgresql://).
+psycopg2-binary>=2.9

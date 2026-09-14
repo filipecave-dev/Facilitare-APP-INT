@@ -106,7 +106,7 @@ class FonteRepository:
         clausulas = []
         params: list = []
         if busca:
-            clausulas.append("(nome LIKE ? OR url LIKE ?)")
+            clausulas.append("(LOWER(nome) LIKE LOWER(?) OR LOWER(url) LIKE LOWER(?))")
             termo = f"%{busca.strip()}%"
             params += [termo, termo]
         if categoria:
@@ -120,7 +120,7 @@ class FonteRepository:
         where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
         sql = (
             "SELECT * FROM fontes" + where +
-            " ORDER BY prioridade DESC, relevancia DESC, nome COLLATE NOCASE ASC"
+            " ORDER BY prioridade DESC, relevancia DESC, LOWER(nome) ASC"
         )
         return [_row_para_fonte(r) for r in self.db.query_all(sql, params)]
 
@@ -184,7 +184,7 @@ class FonteRepository:
         if self.existe_url(url):
             raise ValueError(f"Já existe uma fonte com a URL {url!r}.")
         agora = self._agora()
-        cur = self.db.execute(
+        novo_id = self.db.insert(
             "INSERT INTO fontes (nome, url, categoria, regiao, idioma, "
             "relevancia, prioridade, ativa, criado_em, atualizado_em) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -195,7 +195,7 @@ class FonteRepository:
             ),
         )
         self.db.commit()
-        fonte = self.get(cur.lastrowid)
+        fonte = self.get(novo_id)
         assert fonte is not None
         return fonte
 

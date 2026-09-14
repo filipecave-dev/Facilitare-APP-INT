@@ -1,6 +1,17 @@
 # Blueprint do Render para o Informativo (serviço "CentralInformativo").
 # No painel do Render: New + > Blueprint > selecione este repositório.
 # Depois defina INFORMATIVO_ADMIN_PASSWORD (marcada como "sync: false").
+
+# Banco de dados PostgreSQL gratuito do Render — provisionado automaticamente
+# ao aplicar/sincronizar este blueprint. Persiste usuários, senhas e demais
+# dados entre deploys. (Plano free: expira ~30 dias após a criação; depois é
+# só migrar a URL para outro Postgres, ex.: Neon/Supabase.)
+databases:
+  - name: informativo-db
+    plan: free
+    databaseName: informativo
+    user: informativo
+
 services:
   - type: web
     # Nome do serviço no Render = subdomínio da URL pública.
@@ -15,26 +26,19 @@ services:
       # Chave de sessão gerada e mantida pelo Render.
       - key: INFORMATIVO_SECRET_KEY
         generateValue: true
-      # Usuário admin criado automaticamente na primeira subida.
+      # Usuário admin criado automaticamente na primeira subida (opcional:
+      # com a senha abaixo definida, o admin é recriado a cada deploy; sem
+      # ela, use a tela de primeiro acesso em /setup).
       - key: INFORMATIVO_ADMIN_USERNAME
         value: admin
-      # Defina no painel do Render (não fica versionada).
+      # Defina no painel do Render (não fica versionada). >= 8 caracteres.
       - key: INFORMATIVO_ADMIN_PASSWORD
         sync: false
-      # Banco SQLite. No plano free o disco é efêmero (ver README).
+      # URL do banco PostgreSQL — preenchida automaticamente a partir do
+      # banco "informativo-db" acima. Persiste os dados entre deploys.
       - key: INFORMATIVO_DSN
-        value: "sqlite:///output/informativo.db"
+        fromDatabase:
+          name: informativo-db
+          property: connectionString
       - key: PYTHON_VERSION
         value: "3.12.6"
-
-    # --- Persistência (opcional, requer plano pago) -----------------------
-    # Para não perder fontes/usuários/tema a cada deploy, use um disco e
-    # aponte o DSN para ele. Descomente e troque o plano para "starter":
-    #
-    # plan: starter
-    # disk:
-    #   name: informativo-data
-    #   mountPath: /var/data
-    #   sizeGB: 1
-    # e altere INFORMATIVO_DSN para "sqlite:////var/data/informativo.db"
-    # (quatro barras = caminho absoluto /var/data/informativo.db).

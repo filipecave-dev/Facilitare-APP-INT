@@ -69,12 +69,12 @@ class EmpresaRepository:
     def existe_nome(self, nome: str, ignorar_id: Optional[int] = None) -> bool:
         if ignorar_id is None:
             total = self.db.scalar(
-                "SELECT COUNT(*) FROM empresas WHERE nome = ? COLLATE NOCASE",
+                "SELECT COUNT(*) FROM empresas WHERE LOWER(nome) = LOWER(?)",
                 (nome.strip(),),
             )
         else:
             total = self.db.scalar(
-                "SELECT COUNT(*) FROM empresas WHERE nome = ? COLLATE NOCASE AND id <> ?",
+                "SELECT COUNT(*) FROM empresas WHERE LOWER(nome) = LOWER(?) AND id <> ?",
                 (nome.strip(), ignorar_id),
             )
         return (total or 0) > 0
@@ -83,7 +83,7 @@ class EmpresaRepository:
         sql = "SELECT * FROM empresas"
         if apenas_ativas:
             sql += " WHERE ativa = 1"
-        sql += " ORDER BY nome COLLATE NOCASE ASC"
+        sql += " ORDER BY LOWER(nome) ASC"
         return [_row_para_empresa(r) for r in self.db.query_all(sql)]
 
     # -- escrita ------------------------------------------------------------
@@ -107,7 +107,7 @@ class EmpresaRepository:
         # Assunto do e-mail: por padrão, acompanha o nome da solução.
         assunto_email = (assunto_email or "").strip() or nome_solucao
         agora = self._agora()
-        cur = self.db.execute(
+        novo_id = self.db.insert(
             "INSERT INTO empresas (nome, nome_solucao, assunto_email, contato_email, "
             "tema_primary, ativa, criado_em, atualizado_em) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -115,7 +115,7 @@ class EmpresaRepository:
              1 if ativa else 0, agora, agora),
         )
         self.db.commit()
-        empresa = self.get(cur.lastrowid)
+        empresa = self.get(novo_id)
         assert empresa is not None
         return empresa
 

@@ -83,7 +83,7 @@ informativo-web create-user --username auditoria --perfil Auditor
 
 | Variável                        | Descrição                                        |
 |---------------------------------|--------------------------------------------------|
-| `INFORMATIVO_DSN`             | DSN do banco (padrão `sqlite:///output/informativo.db`) |
+| `INFORMATIVO_DSN`             | DSN do banco: `sqlite:///arquivo.db` ou `postgresql://usuario:senha@host/banco` |
 | `INFORMATIVO_SECRET_KEY`      | Chave da sessão Flask (defina em produção)       |
 | `INFORMATIVO_ADMIN_PASSWORD`  | Senha do admin para `create-admin`               |
 | `INFORMATIVO_USER_PASSWORD`   | Senha para `create-user`                         |
@@ -94,14 +94,18 @@ O repositório já traz o `render.yaml` (blueprint), `wsgi.py` (entrypoint
 gunicorn) e `Procfile`. Passo a passo:
 
 1. No [Render](https://render.com): **New +** → **Blueprint** → conecte este
-   repositório e selecione a branch. O Render lê o `render.yaml`.
-2. Em **Environment**, defina o valor de **`INFORMATIVO_ADMIN_PASSWORD`**
-   (mínimo 8 caracteres). As demais variáveis já vêm configuradas:
+   repositório e selecione a branch. O Render lê o `render.yaml` e provisiona
+   **um banco PostgreSQL gratuito** (`informativo-db`) + o serviço web.
+2. Em **Environment**, opcionalmente defina **`INFORMATIVO_ADMIN_PASSWORD`**
+   (mín. 8 caracteres) para o admin ser recriado a cada deploy. As demais já
+   vêm configuradas:
    - `INFORMATIVO_SECRET_KEY` — gerada automaticamente pelo Render.
-   - `INFORMATIVO_ADMIN_USERNAME` — `admin` (ajuste se quiser).
-3. **Create** / **Deploy**. Na primeira subida o sistema cria as tabelas,
-   semeia as 80 fontes e cria o usuário admin a partir das variáveis acima.
-4. Acesse a URL pública (`https://centralinformativo.onrender.com`) e faça login.
+   - `INFORMATIVO_DSN` — preenchida automaticamente com a URL do PostgreSQL.
+3. **Apply** / **Deploy**. Na primeira subida o sistema cria as tabelas e
+   semeia as 80 fontes no PostgreSQL.
+4. Acesse a URL pública (`https://centralinformativo.onrender.com`). Se ainda
+   não houver admin, você cai na tela de **primeiro acesso** (`/setup`) para
+   criá-lo pelo navegador; depois é só logar.
 
 Comandos usados pelo Render (já no blueprint):
 
@@ -112,19 +116,20 @@ pip install -r requirements.txt && pip install .
 gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4
 ```
 
-### Persistência dos dados
+### Persistência dos dados (PostgreSQL)
 
-No **plano free** o disco é efêmero: a cada novo deploy (ou reinício por
-inatividade) o SQLite é recriado — as 80 fontes e o admin voltam
-automaticamente, mas fontes adicionadas manualmente, alterações de tema e
-usuários extras se perdem. Para manter tudo, use um **disco persistente**
-(plano pago): descomente o bloco `disk:` no `render.yaml`, troque o plano para
-`starter` e aponte `INFORMATIVO_DSN` para
-`sqlite:////var/data/informativo.db`.
+O banco é escolhido pelo `INFORMATIVO_DSN`:
 
-> Para uma alternativa sem disco, o núcleo já isola o acesso a dados em
-> `db.py`; migrar para Postgres (Render Postgres) é o caminho natural numa
-> próxima iteração.
+- **SQLite** (`sqlite:///...`) — padrão local, para desenvolvimento e testes.
+- **PostgreSQL** (`postgresql://...`) — usado em produção. O `render.yaml`
+  provisiona um **Postgres gratuito do Render** e liga a URL automaticamente,
+  de modo que **usuários, senhas, fontes, empresas e tema persistem entre
+  deploys**.
+
+> O Postgres gratuito do Render tem limite de armazenamento e o plano free
+> expira ~30 dias após a criação. Como o app aceita qualquer URL
+> `postgresql://`, migrar depois para um provedor sem expiração (ex.: Neon,
+> Supabase) é só trocar o valor de `INFORMATIVO_DSN`.
 
 ## Testes
 
