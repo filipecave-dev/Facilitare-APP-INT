@@ -63,27 +63,41 @@ def create_app(dsn: Optional[str] = None) -> Flask:
 
 
 def _bootstrap_admin(db: Database) -> None:
-    """Cria o admin inicial a partir de env vars, se ainda não houver usuários.
+    """Garante o usuário administrador a partir de variáveis de ambiente.
 
-    Útil para deploys sem terminal interativo (ex.: Render): defina
-    ``INFORMATIVO_ADMIN_PASSWORD`` (e opcionalmente
-    ``INFORMATIVO_ADMIN_USERNAME`` / ``INFORMATIVO_ADMIN_NOME``) e o usuário
-    é criado automaticamente na primeira subida. Não faz nada se já existir
-    algum usuário ou se a senha não estiver definida.
+    Pensado para deploys sem terminal interativo (ex.: Render). Se
+    ``INFORMATIVO_ADMIN_PASSWORD`` estiver definida (mín. 8 caracteres), o admin
+    é **criado ou tem a senha atualizada** em toda subida — assim, definir a
+    variável no painel e redeployar sempre destrava o login. As mensagens vão
+    para o log (visível no Render) para facilitar o diagnóstico.
+
+    Variáveis:
+    - ``INFORMATIVO_ADMIN_PASSWORD`` (obrigatória p/ criar o admin, >= 8 chars)
+    - ``INFORMATIVO_ADMIN_USERNAME`` (padrão ``admin``)
+    - ``INFORMATIVO_ADMIN_NOME`` (padrão ``Administrador``)
     """
     repo = UsuarioRepository(db)
-    if repo.count() > 0:
-        return
     senha = os.environ.get("INFORMATIVO_ADMIN_PASSWORD")
-    if not senha or len(senha) < 8:
-        return
     username = os.environ.get("INFORMATIVO_ADMIN_USERNAME", "admin")
     nome = os.environ.get("INFORMATIVO_ADMIN_NOME", "Administrador")
+
+    if not senha or len(senha) < 8:
+        if repo.count() == 0:
+            print(
+                "[Informativo] AVISO: nenhum usuário cadastrado e "
+                "INFORMATIVO_ADMIN_PASSWORD ausente ou com menos de 8 "
+                "caracteres — o admin NÃO foi criado. Defina a variável no "
+                "painel (>= 8 caracteres) e faça um novo deploy."
+            )
+        return
+
     try:
-        repo.criar(username, senha, "Administrador", nome=nome)
-    except ValueError:
-        # Corrida entre workers do gunicorn: outro processo já criou.
-        pass
+        # atualizar_se_existir garante que a env var seja a fonte de verdade
+        # da senha do admin a cada subida (cria na 1ª vez, atualiza depois).
+        repo.criar(username, senha, "Administrador", nome=nome, atualizar_se_existir=True)
+        print(f"[Informativo] Admin garantido: username={username.strip().lower()!r}.")
+    except ValueError as exc:
+        print(f"[Informativo] Falha ao garantir o admin: {exc}")
 
 
 # ---------------------------------------------------------------------------
