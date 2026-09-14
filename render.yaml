@@ -1,0 +1,37 @@
+# Blueprint do Render para o InformaTivoli.
+# No painel do Render: New + > Blueprint > selecione este repositório.
+# Depois defina INFORMATIVOLI_ADMIN_PASSWORD (marcada como "sync: false").
+services:
+  - type: web
+    name: informativoli
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt && pip install ."
+    startCommand: "gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4"
+    envVars:
+      # Chave de sessão gerada e mantida pelo Render.
+      - key: INFORMATIVOLI_SECRET_KEY
+        generateValue: true
+      # Usuário admin criado automaticamente na primeira subida.
+      - key: INFORMATIVOLI_ADMIN_USERNAME
+        value: admin
+      # Defina no painel do Render (não fica versionada).
+      - key: INFORMATIVOLI_ADMIN_PASSWORD
+        sync: false
+      # Banco SQLite. No plano free o disco é efêmero (ver README).
+      - key: INFORMATIVOLI_DSN
+        value: "sqlite:///output/informativoli.db"
+      - key: PYTHON_VERSION
+        value: "3.12.6"
+
+    # --- Persistência (opcional, requer plano pago) -----------------------
+    # Para não perder fontes/usuários/tema a cada deploy, use um disco e
+    # aponte o DSN para ele. Descomente e troque o plano para "starter":
+    #
+    # plan: starter
+    # disk:
+    #   name: informativoli-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # e altere INFORMATIVOLI_DSN para "sqlite:////var/data/informativoli.db"
+    # (quatro barras = caminho absoluto /var/data/informativoli.db).

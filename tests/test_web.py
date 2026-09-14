@@ -16,7 +16,10 @@ def app(tmp_path):
     aplicacao.config.update(TESTING=True)
     with Database(dsn) as db:
         init_db(db)
-        UsuarioRepository(db).criar("admin", "senhaforte", "Administrador", nome="Admin")
+        UsuarioRepository(db).criar(
+            "admin", "senhaforte", "Administrador",
+            nome="Admin", atualizar_se_existir=True,
+        )
     return aplicacao
 
 

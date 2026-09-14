@@ -82,6 +82,44 @@ informativoli-web create-user --username auditoria --perfil Auditor
 | `INFORMATIVOLI_ADMIN_PASSWORD`  | Senha do admin para `create-admin`               |
 | `INFORMATIVOLI_USER_PASSWORD`   | Senha para `create-user`                         |
 
+## Deploy no Render
+
+O repositório já traz o `render.yaml` (blueprint), `wsgi.py` (entrypoint
+gunicorn) e `Procfile`. Passo a passo:
+
+1. No [Render](https://render.com): **New +** → **Blueprint** → conecte este
+   repositório e selecione a branch. O Render lê o `render.yaml`.
+2. Em **Environment**, defina o valor de **`INFORMATIVOLI_ADMIN_PASSWORD`**
+   (mínimo 8 caracteres). As demais variáveis já vêm configuradas:
+   - `INFORMATIVOLI_SECRET_KEY` — gerada automaticamente pelo Render.
+   - `INFORMATIVOLI_ADMIN_USERNAME` — `admin` (ajuste se quiser).
+3. **Create** / **Deploy**. Na primeira subida o sistema cria as tabelas,
+   semeia as 80 fontes e cria o usuário admin a partir das variáveis acima.
+4. Acesse a URL pública (`https://informativoli.onrender.com`) e faça login.
+
+Comandos usados pelo Render (já no blueprint):
+
+```bash
+# build
+pip install -r requirements.txt && pip install .
+# start
+gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4
+```
+
+### Persistência dos dados
+
+No **plano free** o disco é efêmero: a cada novo deploy (ou reinício por
+inatividade) o SQLite é recriado — as 80 fontes e o admin voltam
+automaticamente, mas fontes adicionadas manualmente, alterações de tema e
+usuários extras se perdem. Para manter tudo, use um **disco persistente**
+(plano pago): descomente o bloco `disk:` no `render.yaml`, troque o plano para
+`starter` e aponte `INFORMATIVOLI_DSN` para
+`sqlite:////var/data/informativoli.db`.
+
+> Para uma alternativa sem disco, o núcleo já isola o acesso a dados em
+> `db.py`; migrar para Postgres (Render Postgres) é o caminho natural numa
+> próxima iteração.
+
 ## Testes
 
 ```bash

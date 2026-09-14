@@ -50,13 +50,39 @@ def create_app(dsn: Optional[str] = None) -> Flask:
     app.config["DSN"] = dsn or os.environ.get("INFORMATIVOLI_DSN", DSN_PADRAO)
     app.secret_key = os.environ.get("INFORMATIVOLI_SECRET_KEY") or os.urandom(32)
 
-    # Garante o esquema e semeia as fontes na primeira execução.
+    # Garante o esquema, semeia as fontes e (em ambientes sem shell, como o
+    # Render) cria o administrador a partir de variáveis de ambiente.
     with Database(app.config["DSN"]) as db:
         init_db(db)
         FonteRepository(db).semear_se_vazio()
+        _bootstrap_admin(db)
 
     _registrar(app)
     return app
+
+
+def _bootstrap_admin(db: Database) -> None:
+    """Cria o admin inicial a partir de env vars, se ainda não houver usuários.
+
+    Útil para deploys sem terminal interativo (ex.: Render): defina
+    ``INFORMATIVOLI_ADMIN_PASSWORD`` (e opcionalmente
+    ``INFORMATIVOLI_ADMIN_USERNAME`` / ``INFORMATIVOLI_ADMIN_NOME``) e o usuário
+    é criado automaticamente na primeira subida. Não faz nada se já existir
+    algum usuário ou se a senha não estiver definida.
+    """
+    repo = UsuarioRepository(db)
+    if repo.count() > 0:
+        return
+    senha = os.environ.get("INFORMATIVOLI_ADMIN_PASSWORD")
+    if not senha or len(senha) < 8:
+        return
+    username = os.environ.get("INFORMATIVOLI_ADMIN_USERNAME", "admin")
+    nome = os.environ.get("INFORMATIVOLI_ADMIN_NOME", "Administrador")
+    try:
+        repo.criar(username, senha, "Administrador", nome=nome)
+    except ValueError:
+        # Corrida entre workers do gunicorn: outro processo já criou.
+        pass
 
 
 # ---------------------------------------------------------------------------
