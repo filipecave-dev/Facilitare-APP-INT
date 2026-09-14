@@ -84,6 +84,53 @@ def test_cadastrar_empresa_com_nome_solucao_e_assunto(client):
     assert "Acme Viagens".encode() in resp.data
 
 
+def test_primeiro_acesso_setup(tmp_path):
+    # App sem nenhum usuário: a raiz deve redirecionar para /setup.
+    dsn = f"sqlite:///{tmp_path}/novo.db"
+    app = create_app(dsn=dsn)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+
+    resp = client.get("/")
+    assert resp.status_code == 302
+    assert "/setup" in resp.headers["Location"]
+
+    # Criar o admin pelo navegador e já entrar autenticado.
+    resp = client.post(
+        "/setup",
+        data={"username": "admin", "nome": "Chefe",
+              "senha": "senha12345", "confirmar": "senha12345"},
+        follow_redirects=True,
+    )
+    assert resp.status_code == 200
+    assert b"Painel Principal" in resp.data
+
+    # Com admin criado, /setup passa a redirecionar para o login.
+    resp = client.get("/setup")
+    assert resp.status_code == 302
+
+
+def test_setup_senha_curta_ou_diferente(tmp_path):
+    dsn = f"sqlite:///{tmp_path}/novo2.db"
+    app = create_app(dsn=dsn)
+    app.config.update(TESTING=True)
+    client = app.test_client()
+    # Senha curta.
+    resp = client.post(
+        "/setup",
+        data={"username": "admin", "senha": "curta", "confirmar": "curta"},
+        follow_redirects=True,
+    )
+    assert "ao menos 8".encode() in resp.data
+    # Senhas diferentes.
+    resp = client.post(
+        "/setup",
+        data={"username": "admin", "senha": "senha12345", "confirmar": "outra12345"},
+        follow_redirects=True,
+    )
+    assert "não conferem".encode() in resp.data
+
+
 def test_salvar_tema(client, app):
     _login(client)
     client.post(

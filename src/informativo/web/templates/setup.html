@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Primeiro acesso — Informativo{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <form class="card login-card" method="post" action="{{ url_for('setup') }}">
+    <h1>Informa<span style="color:var(--primary)">tivo</span></h1>
+    <p class="muted">Primeiro acesso — crie o administrador</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash flash-{{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <label>Usuário
+      <input type="text" name="username" value="admin" required autocomplete="username">
+    </label>
+    <label>Nome
+      <input type="text" name="nome" value="Administrador">
+    </label>
+    <label>Senha (mín. 8 caracteres)
+      <input type="password" name="senha" required minlength="8" autocomplete="new-password">
+    </label>
+    <label>Confirmar senha
+      <input type="password" name="confirmar" required minlength="8" autocomplete="new-password">
+    </label>
+    <button type="submit" class="btn btn-primary">Criar administrador</button>
+  </form>
+</div>
+{% endblock %}

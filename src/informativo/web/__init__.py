@@ -176,10 +176,14 @@ def _registrar(app: Flask) -> None:
     # -- Autenticação -------------------------------------------------------
     @app.route("/", methods=["GET", "POST"])
     def login():
+        repo = UsuarioRepository(_db())
+        # Primeiro acesso: nenhum usuário cadastrado -> tela de criação do admin.
+        if repo.count() == 0:
+            return redirect(url_for("setup"))
         if request.method == "POST":
             username = request.form.get("username", "")
             senha = request.form.get("senha", "")
-            conta = UsuarioRepository(_db()).autenticar(username, senha)
+            conta = repo.autenticar(username, senha)
             if conta is None:
                 flash("Usuário ou senha inválidos.", "erro")
                 return redirect(url_for("login"))
@@ -190,6 +194,39 @@ def _registrar(app: Flask) -> None:
         if session.get("username"):
             return redirect(url_for("dashboard"))
         return render_template("login.html")
+
+    @app.route("/setup", methods=["GET", "POST"])
+    def setup():
+        """Primeiro acesso: cria o administrador pelo navegador.
+
+        Só funciona enquanto não houver nenhum usuário cadastrado; depois
+        disso, redireciona para o login. Isso garante o acesso mesmo sem
+        variáveis de ambiente configuradas.
+        """
+        repo = UsuarioRepository(_db())
+        if repo.count() > 0:
+            return redirect(url_for("login"))
+        if request.method == "POST":
+            username = (request.form.get("username") or "admin").strip()
+            senha = request.form.get("senha", "")
+            confirmar = request.form.get("confirmar", "")
+            nome = (request.form.get("nome") or "Administrador").strip()
+            if len(senha) < 8:
+                flash("A senha deve ter ao menos 8 caracteres.", "erro")
+                return redirect(url_for("setup"))
+            if senha != confirmar:
+                flash("As senhas não conferem.", "erro")
+                return redirect(url_for("setup"))
+            try:
+                conta = repo.criar(username, senha, "Administrador", nome=nome)
+            except ValueError as exc:
+                flash(str(exc), "erro")
+                return redirect(url_for("setup"))
+            session["username"] = conta.username
+            session["nome"] = conta.nome or conta.username
+            flash("Administrador criado com sucesso. Bem-vindo(a)!", "ok")
+            return redirect(url_for("dashboard"))
+        return render_template("setup.html")
 
     @app.route("/logout")
     def logout():
