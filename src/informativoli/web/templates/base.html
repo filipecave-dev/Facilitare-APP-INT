@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}InformaTivoli{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  {# Tema selecionado nas Configurações (padrão azul), aplicado sobre :root. #}
+  <style>
+    :root {
+      {% for chave, valor in tema_css_vars.items() %}{{ chave }}: {{ valor }};{% endfor %}
+    }
+  </style>
+</head>
+<body>
+{% if principal %}
+<header class="topbar">
+  <div class="brand"><a href="{{ url_for('dashboard') }}">Informa<span class="dot">Tivoli</span></a></div>
+  <nav class="mainnav">
+    <a href="{{ url_for('dashboard') }}" class="{{ 'ativo' if request.endpoint == 'dashboard' }}">Início</a>
+    <a href="{{ url_for('fontes') }}" class="{{ 'ativo' if request.endpoint == 'fontes' }}">Fontes</a>
+    <a href="{{ url_for('newsletter_nova') }}">Newsletter</a>
+    <a href="{{ url_for('auditoria') }}">Auditoria</a>
+    <a href="{{ url_for('parceiros') }}">Parceiros</a>
+    <a href="{{ url_for('settings') }}" class="{{ 'ativo' if request.endpoint == 'settings' }}">Configurações</a>
+  </nav>
+  <div class="userbox">
+    <span class="user">{{ session['nome'] }}</span>
+    <span class="badge">{{ principal.perfil }}</span>
+    <a class="logout" href="{{ url_for('logout') }}">Sair</a>
+  </div>
+</header>
+{% endif %}
+
+<main class="content">
+  {% with mensagens = get_flashed_messages(with_categories=true) %}
+    {% if mensagens %}
+      <div class="flashes">
+        {% for categoria, msg in mensagens %}
+          <div class="flash flash-{{ categoria }}">{{ msg }}</div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

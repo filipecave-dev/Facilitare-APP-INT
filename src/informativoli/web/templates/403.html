@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Acesso negado — InformaTivoli{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="empty">
+    <div class="big">🔒</div>
+    <h2>Acesso negado</h2>
+    <p>Seu perfil não tem permissão para esta ação.</p>
+    <p><a class="btn btn-primary" href="{{ url_for('dashboard') }}">Voltar ao painel</a></p>
+  </div>
+</div>
+{% endblock %}

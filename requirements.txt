@@ -1,0 +1,5 @@
+# Dependências do InformaTivoli.
+# O núcleo (db, auth, fontes, config) usa apenas a biblioteca padrão + Werkzeug.
+# Flask é necessário para a interface web.
+flask>=3.0
+werkzeug>=3.0

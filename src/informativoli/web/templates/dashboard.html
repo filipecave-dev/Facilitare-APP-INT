@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Painel — InformaTivoli{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Painel Principal</h1>
+    <p class="muted">Visão geral das fontes de informação monitoradas.</p>
+  </div>
+  <a class="btn btn-primary" href="{{ url_for('fontes') }}">Gerenciar fontes</a>
+</div>
+
+<div class="cards">
+  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Fontes cadastradas</span></div>
+  <div class="card stat"><span class="num">{{ resumo.ativas }}</span><span class="lbl">Fontes ativas</span></div>
+  <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
+  <div class="card stat"><span class="num">{{ resumo.regioes }}</span><span class="lbl">Países/Regiões</span></div>
+</div>
+
+<div class="card">
+  <h2>Fontes recentes / prioritárias</h2>
+  {% if recentes %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Fonte</th><th>Categoria</th><th>País/Região</th><th>Prioridade</th><th>Situação</th></tr>
+      </thead>
+      <tbody>
+        {% for f in recentes %}
+        <tr>
+          <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a></td>
+          <td>{{ f.categoria or '—' }}</td>
+          <td>{{ f.regiao or '—' }}</td>
+          <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.prioridade else 'off' }}">★</span>{% endfor %}</span></td>
+          <td>{% if f.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma fonte cadastrada ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Fontes — InformaTivoli{% endblock %}
+{% set pode_editar = principal.perfil in ('Administrador', 'Editor') %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Gerenciar Fontes</h1>
+    <p class="muted">Provedores de onde o InformaTivoli captura informações a buscar.</p>
+  </div>
+  {% if pode_editar %}
+  <form class="inline-form" method="post" action="{{ url_for('fontes_importar') }}"
+        onsubmit="return confirm('Importar as fontes de referência (planilha)? URLs já cadastradas serão ignoradas.');">
+    <button type="submit" class="btn">Importar fontes de referência</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="cards">
+  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Total</span></div>
+  <div class="card stat"><span class="num">{{ resumo.ativas }}</span><span class="lbl">Ativas</span></div>
+  <div class="card stat"><span class="num">{{ resumo.inativas }}</span><span class="lbl">Inativas</span></div>
+  <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
+</div>
+
+{% if pode_editar %}
+<div class="card">
+  <h2>Adicionar fonte</h2>
+  <form method="post" action="{{ url_for('fontes_adicionar') }}">
+    <div class="grid">
+      <label>Fonte
+        <input type="text" name="nome" required placeholder="Ex.: Reuters">
+      </label>
+      <label>URL / Site
+        <input type="text" name="url" required placeholder="https://www.exemplo.com">
+      </label>
+      <label>Categoria
+        <input type="text" name="categoria" list="lst-categorias" placeholder="Ex.: Segurança">
+        <datalist id="lst-categorias">
+          {% for c in categorias %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+      </label>
+      <label>País/Região
+        <input type="text" name="regiao" list="lst-regioes" placeholder="Ex.: Brasil">
+        <datalist id="lst-regioes">
+          {% for r in regioes %}<option value="{{ r }}">{% endfor %}
+        </datalist>
+      </label>
+      <label>Idioma
+        <input type="text" name="idioma" placeholder="Ex.: Português">
+      </label>
+      <label>Relevância
+        <select name="relevancia">
+          {% for n in range(1,6) %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Prioridade
+        <select name="prioridade">
+          {% for n in range(1,6) %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Adicionar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Filtrar</h2>
+  <form method="get" action="{{ url_for('fontes') }}">
+    <div class="grid">
+      <label>Busca (nome ou URL)
+        <input type="text" name="busca" value="{{ filtros.busca }}" placeholder="Digite para filtrar…">
+      </label>
+      <label>Categoria
+        <select name="categoria">
+          <option value="">Todas</option>
+          {% for c in categorias %}<option value="{{ c }}" {{ 'selected' if c == filtros.categoria }}>{{ c }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>País/Região
+        <select name="regiao">
+          <option value="">Todos</option>
+          {% for r in regioes %}<option value="{{ r }}" {{ 'selected' if r == filtros.regiao }}>{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check"><input type="checkbox" name="ativas" value="1" {{ 'checked' if filtros.ativas }}> Apenas ativas</label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Aplicar filtros</button>
+      <a class="btn" href="{{ url_for('fontes') }}">Limpar</a>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Fontes ({{ fontes|length }})</h2>
+  {% if fontes %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fonte</th><th>Categoria</th><th>País/Região</th>
+          <th>Relevância</th><th>Prioridade</th><th>Situação</th><th>Inclusão</th>
+          {% if pode_editar %}<th>Ações</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for f in fontes %}
+        <tr>
+          <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a></td>
+          <td>{{ f.categoria or '—' }}</td>
+          <td>{{ f.regiao or '—' }}</td>
+          <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.relevancia else 'off' }}">★</span>{% endfor %}</span></td>
+          <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.prioridade else 'off' }}">★</span>{% endfor %}</span></td>
+          <td>{% if f.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
+          <td class="muted">{{ (f.criado_em or '')[:10] or '—' }}</td>
+          {% if pode_editar %}
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('fontes_alternar', fonte_id=f.id) }}">
+              <button type="submit" class="btn btn-sm">{{ 'Desativar' if f.ativa else 'Ativar' }}</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('fontes_remover', fonte_id=f.id) }}"
+                  onsubmit="return confirm('Remover a fonte {{ f.nome }}?');">
+              <button type="submit" class="btn btn-sm btn-danger">Remover</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma fonte encontrada com os filtros atuais.</p>
+  {% endif %}
+</div>
+{% endblock %}

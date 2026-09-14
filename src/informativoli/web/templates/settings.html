@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Configurações — InformaTivoli{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Configurações</h1>
+    <p class="muted">Aparência do sistema e integrações.</p>
+  </div>
+</div>
+
+<form method="post" action="{{ url_for('settings') }}">
+  <div class="card">
+    <h2>Tema / cores</h2>
+    <p class="help">Escolha a cor de destaque do sistema. O padrão é azul.</p>
+    <div class="swatches">
+      {% for p in presets %}
+      <label class="swatch">
+        <input type="radio" name="tema_primary" value="{{ p.primary }}"
+               {{ 'checked' if p.primary|lower == cor_atual|lower }}
+               onchange="document.getElementById('cor-custom').value=this.value; document.getElementById('cor-hex').value=this.value;">
+        <span class="chip"><span class="dot" style="background: {{ p.primary }}"></span>{{ p.rotulo }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <label>Cor personalizada
+      <span class="custom-row">
+        <input type="color" id="cor-custom" value="{{ cor_atual }}"
+               onchange="document.getElementById('cor-hex').value=this.value; marcarCustom(this.value);">
+        <input type="text" id="cor-hex" value="{{ cor_atual }}" pattern="#[0-9a-fA-F]{6}"
+               onchange="document.getElementById('cor-custom').value=this.value; marcarCustom(this.value);">
+        <span class="muted">Use o seletor ou informe um hex (#RRGGBB).</span>
+      </span>
+    </label>
+  </div>
+
+  <div class="card">
+    <h2>Integrações</h2>
+    <p class="help">Credenciais usadas pelas telas de envio de newsletter (uso futuro).</p>
+    <div class="grid">
+      <label>Chave de API — E-mail
+        <input type="password" name="api_email" value="{{ api_email }}" placeholder="••••••••" autocomplete="off">
+      </label>
+      <label>Chave de API — Omniroute
+        <input type="password" name="api_omniroute" value="{{ api_omniroute }}" placeholder="••••••••" autocomplete="off">
+      </label>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Salvar configurações</button>
+  </div>
+</form>
+
+<script>
+  // Quando o usuário escolhe uma cor personalizada que não bate com nenhum
+  // preset, desmarca os presets para deixar claro que o valor é custom.
+  function marcarCustom(valor) {
+    var achou = false;
+    document.querySelectorAll('input[name="tema_primary"]').forEach(function (r) {
+      if (r.value.toLowerCase() === valor.toLowerCase()) { r.checked = true; achou = true; }
+      else { r.checked = false; }
+    });
+    if (!achou) {
+      // Nenhum preset corresponde: injeta/atualiza um rádio oculto com o valor.
+      var oculto = document.getElementById('tema-custom-hidden');
+      if (!oculto) {
+        oculto = document.createElement('input');
+        oculto.type = 'radio';
+        oculto.name = 'tema_primary';
+        oculto.id = 'tema-custom-hidden';
+        oculto.style.display = 'none';
+        document.querySelector('.swatches').appendChild(oculto);
+      }
+      oculto.value = valor;
+      oculto.checked = true;
+    }
+  }
+</script>
+{% endblock %}

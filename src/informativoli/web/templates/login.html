@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Entrar — InformaTivoli{% endblock %}
+{% block content %}
+<div class="login-wrap">
+  <form class="card login-card" method="post" action="{{ url_for('login') }}">
+    <h1>Informa<span style="color:var(--primary)">Tivoli</span></h1>
+    <p class="muted">Gestão de informações — acesse sua conta</p>
+    {% with mensagens = get_flashed_messages(with_categories=true) %}
+      {% for categoria, msg in mensagens %}
+        <div class="flash flash-{{ categoria }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    <label>Usuário
+      <input type="text" name="username" autofocus required autocomplete="username">
+    </label>
+    <label>Senha
+      <input type="password" name="senha" required autocomplete="current-password">
+    </label>
+    <button type="submit" class="btn btn-primary">Entrar</button>
+  </form>
+</div>
+{% endblock %}
