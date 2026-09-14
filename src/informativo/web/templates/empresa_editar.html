@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ empresa.nome }} — Informativo{% endblock %}
+{% set pode_gerir = principal.perfil == 'Administrador' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Editar empresa</h1>
+    <p class="muted">Personalize o nome de saída e a identidade desta empresa.</p>
+  </div>
+  <a class="btn" href="{{ url_for('empresas') }}">Voltar</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('empresa_editar', empresa_id=empresa.id) }}">
+    <div class="grid">
+      <label>Nome da empresa
+        <input type="text" name="nome" value="{{ empresa.nome }}" required {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label>Nome de saída
+        <input type="text" name="nome_saida" value="{{ empresa.nome_saida }}"
+               placeholder="Nome exibido no informativo" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label>E-mail de contato
+        <input type="email" name="contato_email" value="{{ empresa.contato_email or '' }}" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label>Cor de destaque
+        <input type="color" name="tema_primary" value="{{ empresa.tema_primary or '#2557d6' }}" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="ativa" value="1" {{ 'checked' if empresa.ativa }} {{ '' if pode_gerir else 'disabled' }}> Empresa ativa
+      </label>
+    </div>
+    <p class="help">Prévia do nome de saída:
+      <span class="pill" style="background: {{ empresa.tema_primary or '#2557d6' }}; color:#fff">{{ empresa.nome_saida }}</span>
+    </p>
+    {% if pode_gerir %}
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Salvar alterações</button>
+    </div>
+    {% else %}
+    <p class="muted">Somente administradores podem editar empresas.</p>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -1,4 +1,4 @@
-"""Autenticação de contas de usuário (login/senha) do InformaTivoli.
+"""Autenticação de contas de usuário (login/senha) do Informativo.
 
 As senhas são gravadas **apenas como hash PBKDF2** (via Werkzeug), nunca em
 texto puro. Os perfis são simples rótulos de texto — Administrador, Editor e

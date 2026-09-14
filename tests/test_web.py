@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from informativoli.auth import UsuarioRepository
-from informativoli.db import Database, init_db
-from informativoli.web import create_app
+from informativo.auth import UsuarioRepository
+from informativo.db import Database, init_db
+from informativo.web import create_app
 
 
 @pytest.fixture()
@@ -35,7 +35,7 @@ def _login(client):
 
 
 def test_seed_ao_criar_app(app):
-    from informativoli.fontes import FonteRepository
+    from informativo.fontes import FonteRepository
 
     with Database(app.config["DSN"]) as db:
         assert FonteRepository(db).count() == 80
@@ -68,6 +68,18 @@ def test_adicionar_e_remover_fonte(client):
         follow_redirects=True,
     )
     assert "Fonte Teste".encode() in resp.data
+
+
+def test_cadastrar_empresa_com_nome_de_saida(client):
+    _login(client)
+    resp = client.post(
+        "/empresas/adicionar",
+        data={"nome": "Acme Viagens", "nome_saida": "Acme Alertas",
+              "contato_email": "", "tema_primary": "#1c7a43", "ativa": "1"},
+        follow_redirects=True,
+    )
+    assert "Acme Alertas".encode() in resp.data
+    assert "Acme Viagens".encode() in resp.data
 
 
 def test_salvar_tema(client, app):

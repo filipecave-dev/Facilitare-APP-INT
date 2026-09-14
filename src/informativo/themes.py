@@ -1,4 +1,4 @@
-"""Paletas de tema do InformaTivoli.
+"""Paletas de tema do Informativo.
 
 A tela de Configurações permite trocar a cor de destaque (accent) do sistema,
 no mesmo espírito do QuitaCalc. O padrão é **azul** (``#2557d6``). Cada tema é

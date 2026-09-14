@@ -1,6 +1,6 @@
 """Cadastro das fontes de informação a buscar.
 
-Uma *fonte* é um provedor de onde o InformaTivoli captura informações (site,
+Uma *fonte* é um provedor de onde o Informativo captura informações (site,
 portal, órgão oficial etc.). O cadastro inicial vem da aba **Fontes** da
 planilha de referência (80 fontes), empacotada em ``seed_data/fontes_seed.json``.
 

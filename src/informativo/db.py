@@ -37,6 +37,17 @@ CREATE TABLE IF NOT EXISTS fontes (
     atualizado_em TEXT
 );
 
+CREATE TABLE IF NOT EXISTS empresas (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome          TEXT    NOT NULL UNIQUE,
+    nome_saida    TEXT    NOT NULL,
+    contato_email TEXT,
+    tema_primary  TEXT,
+    ativa         INTEGER NOT NULL DEFAULT 1,
+    criado_em     TEXT,
+    atualizado_em TEXT
+);
+
 CREATE TABLE IF NOT EXISTS configuracoes (
     chave TEXT PRIMARY KEY,
     valor TEXT
@@ -58,7 +69,7 @@ class Database:
 
     Uso típico::
 
-        with Database("sqlite:///output/informativoli.db") as db:
+        with Database("sqlite:///output/informativo.db") as db:
             init_db(db)
             db.query_all("SELECT * FROM fontes")
     """

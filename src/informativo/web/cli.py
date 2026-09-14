@@ -1,4 +1,4 @@
-"""CLI da aplicação web do InformaTivoli.
+"""CLI da aplicação web do Informativo.
 
 Subcomandos:
 
@@ -7,14 +7,14 @@ Subcomandos:
 * ``run``          — sobe o servidor de desenvolvimento.
 
 A senha **nunca** é lida de um valor fixo no código: use ``--password`` na sua
-máquina ou a variável de ambiente ``INFORMATIVOLI_ADMIN_PASSWORD`` /
-``INFORMATIVOLI_USER_PASSWORD``. Ela é gravada apenas como hash PBKDF2.
+máquina ou a variável de ambiente ``INFORMATIVO_ADMIN_PASSWORD`` /
+``INFORMATIVO_USER_PASSWORD``. Ela é gravada apenas como hash PBKDF2.
 
 Exemplos::
 
-    export INFORMATIVOLI_ADMIN_PASSWORD='sua-senha-forte'
-    informativoli-web create-admin --dsn sqlite:///output/informativoli.db
-    informativoli-web run --port 8000
+    export INFORMATIVO_ADMIN_PASSWORD='sua-senha-forte'
+    informativo-web create-admin --dsn sqlite:///output/informativo.db
+    informativo-web run --port 8000
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _resolver_senha(cli_valor: Optional[str], env_var: str) -> str:
 
 
 def _cmd_create_admin(args) -> int:
-    senha = _resolver_senha(args.password, "INFORMATIVOLI_ADMIN_PASSWORD")
+    senha = _resolver_senha(args.password, "INFORMATIVO_ADMIN_PASSWORD")
     with Database(args.dsn) as db:
         init_db(db)
         conta = UsuarioRepository(db).criar(
@@ -56,7 +56,7 @@ def _cmd_create_admin(args) -> int:
 
 
 def _cmd_create_user(args) -> int:
-    senha = _resolver_senha(args.password, "INFORMATIVOLI_USER_PASSWORD")
+    senha = _resolver_senha(args.password, "INFORMATIVO_USER_PASSWORD")
     with Database(args.dsn) as db:
         init_db(db)
         try:
@@ -76,11 +76,11 @@ def _cmd_create_user(args) -> int:
 def _cmd_run(args) -> int:
     from . import create_app
 
-    os.environ.setdefault("INFORMATIVOLI_DSN", args.dsn)
+    os.environ.setdefault("INFORMATIVO_DSN", args.dsn)
     app = create_app(dsn=args.dsn)
-    if not os.environ.get("INFORMATIVOLI_SECRET_KEY"):
+    if not os.environ.get("INFORMATIVO_SECRET_KEY"):
         print(
-            "AVISO: INFORMATIVOLI_SECRET_KEY não definida — usando chave "
+            "AVISO: INFORMATIVO_SECRET_KEY não definida — usando chave "
             "efêmera (as sessões caem a cada reinício). Defina-a em produção."
         )
     with Database(args.dsn) as db:
@@ -90,7 +90,7 @@ def _cmd_run(args) -> int:
     if total_usuarios == 0:
         print(
             "AVISO: nenhum usuário cadastrado. Crie o admin primeiro:\n"
-            "  informativoli-web create-admin --dsn " + args.dsn
+            "  informativo-web create-admin --dsn " + args.dsn
         )
     print(f"Fontes cadastradas: {total_fontes}")
     print(f"Servindo em http://{args.host}:{args.port}  (DSN: {args.dsn})")
@@ -102,13 +102,13 @@ def build_parser() -> argparse.ArgumentParser:
     comum = argparse.ArgumentParser(add_help=False)
     comum.add_argument(
         "--dsn",
-        default=os.environ.get("INFORMATIVOLI_DSN", DSN_PADRAO),
+        default=os.environ.get("INFORMATIVO_DSN", DSN_PADRAO),
         help="DSN do banco SQLite (sqlite:///arquivo.db).",
     )
 
     p = argparse.ArgumentParser(
-        prog="informativoli-web",
-        description="Interface web do InformaTivoli (login, fontes e configurações).",
+        prog="informativo-web",
+        description="Interface web do Informativo (login, fontes e configurações).",
         parents=[comum],
     )
     sub = p.add_subparsers(dest="comando", required=True)
@@ -116,7 +116,7 @@ def build_parser() -> argparse.ArgumentParser:
     pa = sub.add_parser("create-admin", help="Cria/atualiza o admin.", parents=[comum])
     pa.add_argument("--username", default="admin")
     pa.add_argument("--nome", default=None)
-    pa.add_argument("--password", default=None, help="Senha (ou INFORMATIVOLI_ADMIN_PASSWORD).")
+    pa.add_argument("--password", default=None, help="Senha (ou INFORMATIVO_ADMIN_PASSWORD).")
 
     pu = sub.add_parser("create-user", help="Cria um usuário.", parents=[comum])
     pu.add_argument("--username", required=True)
@@ -126,7 +126,7 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         choices=["Administrador", "Editor", "Auditor"],
     )
-    pu.add_argument("--password", default=None, help="Senha (ou INFORMATIVOLI_USER_PASSWORD).")
+    pu.add_argument("--password", default=None, help="Senha (ou INFORMATIVO_USER_PASSWORD).")
     pu.add_argument("--atualizar", action="store_true", help="Atualiza se já existir.")
 
     pr = sub.add_parser("run", help="Sobe o servidor web.", parents=[comum])

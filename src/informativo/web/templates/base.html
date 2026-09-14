@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}InformaTivoli{% endblock %}</title>
+  <title>{% block title %}Informativo{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   {# Tema selecionado nas Configurações (padrão azul), aplicado sobre :root. #}
   <style>
@@ -15,13 +15,13 @@
 <body>
 {% if principal %}
 <header class="topbar">
-  <div class="brand"><a href="{{ url_for('dashboard') }}">Informa<span class="dot">Tivoli</span></a></div>
+  <div class="brand"><a href="{{ url_for('dashboard') }}">Informa<span class="dot">tivo</span></a></div>
   <nav class="mainnav">
     <a href="{{ url_for('dashboard') }}" class="{{ 'ativo' if request.endpoint == 'dashboard' }}">Início</a>
     <a href="{{ url_for('fontes') }}" class="{{ 'ativo' if request.endpoint == 'fontes' }}">Fontes</a>
+    <a href="{{ url_for('empresas') }}" class="{{ 'ativo' if request.endpoint in ('empresas', 'empresa_editar') }}">Empresas</a>
     <a href="{{ url_for('newsletter_nova') }}">Newsletter</a>
     <a href="{{ url_for('auditoria') }}">Auditoria</a>
-    <a href="{{ url_for('parceiros') }}">Parceiros</a>
     <a href="{{ url_for('settings') }}" class="{{ 'ativo' if request.endpoint == 'settings' }}">Configurações</a>
   </nav>
   <div class="userbox">

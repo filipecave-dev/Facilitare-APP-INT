@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from informativoli.auth import UsuarioRepository, hash_senha, verificar_senha
-from informativoli.db import Database, init_db
-from informativoli.fontes import FonteRepository, carregar_seed
-from informativoli.settings_repo import SettingsRepository
-from informativoli.themes import TEMA_PADRAO, normalizar_cor, tinta_de_contraste, variaveis_css
+from informativo.auth import UsuarioRepository, hash_senha, verificar_senha
+from informativo.db import Database, init_db
+from informativo.fontes import FonteRepository, carregar_seed
+from informativo.settings_repo import SettingsRepository
+from informativo.themes import TEMA_PADRAO, normalizar_cor, tinta_de_contraste, variaveis_css
 
 
 @pytest.fixture()

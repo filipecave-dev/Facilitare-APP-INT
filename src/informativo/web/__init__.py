@@ -1,4 +1,4 @@
-"""Aplicação web (Flask) do InformaTivoli.
+"""Aplicação web (Flask) do Informativo.
 
 Interface visual com login/senha e as telas descritas na especificação do
 produto. Nesta versão estão totalmente funcionais:
@@ -38,17 +38,18 @@ from flask import (
 
 from ..auth import PERFIS, UsuarioRepository
 from ..db import Database, init_db
+from ..empresas import EmpresaRepository
 from ..fontes import FonteRepository
 from ..settings_repo import SettingsRepository
 from ..themes import CHAVE_TEMA, PRESETS, TEMA_PADRAO, normalizar_cor, variaveis_css
 
-DSN_PADRAO = "sqlite:///output/informativoli.db"
+DSN_PADRAO = "sqlite:///output/informativo.db"
 
 
 def create_app(dsn: Optional[str] = None) -> Flask:
     app = Flask(__name__)
-    app.config["DSN"] = dsn or os.environ.get("INFORMATIVOLI_DSN", DSN_PADRAO)
-    app.secret_key = os.environ.get("INFORMATIVOLI_SECRET_KEY") or os.urandom(32)
+    app.config["DSN"] = dsn or os.environ.get("INFORMATIVO_DSN", DSN_PADRAO)
+    app.secret_key = os.environ.get("INFORMATIVO_SECRET_KEY") or os.urandom(32)
 
     # Garante o esquema, semeia as fontes e (em ambientes sem shell, como o
     # Render) cria o administrador a partir de variáveis de ambiente.
@@ -65,19 +66,19 @@ def _bootstrap_admin(db: Database) -> None:
     """Cria o admin inicial a partir de env vars, se ainda não houver usuários.
 
     Útil para deploys sem terminal interativo (ex.: Render): defina
-    ``INFORMATIVOLI_ADMIN_PASSWORD`` (e opcionalmente
-    ``INFORMATIVOLI_ADMIN_USERNAME`` / ``INFORMATIVOLI_ADMIN_NOME``) e o usuário
+    ``INFORMATIVO_ADMIN_PASSWORD`` (e opcionalmente
+    ``INFORMATIVO_ADMIN_USERNAME`` / ``INFORMATIVO_ADMIN_NOME``) e o usuário
     é criado automaticamente na primeira subida. Não faz nada se já existir
     algum usuário ou se a senha não estiver definida.
     """
     repo = UsuarioRepository(db)
     if repo.count() > 0:
         return
-    senha = os.environ.get("INFORMATIVOLI_ADMIN_PASSWORD")
+    senha = os.environ.get("INFORMATIVO_ADMIN_PASSWORD")
     if not senha or len(senha) < 8:
         return
-    username = os.environ.get("INFORMATIVOLI_ADMIN_USERNAME", "admin")
-    nome = os.environ.get("INFORMATIVOLI_ADMIN_NOME", "Administrador")
+    username = os.environ.get("INFORMATIVO_ADMIN_USERNAME", "admin")
+    nome = os.environ.get("INFORMATIVO_ADMIN_NOME", "Administrador")
     try:
         repo.criar(username, senha, "Administrador", nome=nome)
     except ValueError:
@@ -189,7 +190,13 @@ def _registrar(app: Flask) -> None:
         repo = FonteRepository(_db())
         resumo = repo.resumo()
         recentes = repo.listar()[:8]
-        return render_template("dashboard.html", resumo=resumo, recentes=recentes)
+        total_empresas = EmpresaRepository(_db()).count()
+        return render_template(
+            "dashboard.html",
+            resumo=resumo,
+            recentes=recentes,
+            total_empresas=total_empresas,
+        )
 
     # -- Gerenciar fontes ---------------------------------------------------
     @app.route("/fontes")
@@ -292,12 +299,82 @@ def _registrar(app: Flask) -> None:
             api_omniroute=repo.get("api_omniroute", ""),
         )
 
+    # -- Empresas (clientes) ------------------------------------------------
+    @app.route("/empresas")
+    @login_obrigatorio
+    def empresas():
+        repo = EmpresaRepository(_db())
+        return render_template("empresas.html", empresas=repo.listar())
+
+    @app.route("/empresas/adicionar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresas_adicionar():
+        repo = EmpresaRepository(_db())
+        try:
+            empresa = repo.criar(
+                request.form.get("nome", ""),
+                nome_saida=request.form.get("nome_saida") or None,
+                contato_email=request.form.get("contato_email") or None,
+                tema_primary=normalizar_cor(request.form.get("tema_primary", TEMA_PADRAO)),
+                ativa=request.form.get("ativa", "1") == "1",
+            )
+            flash(f"Empresa '{empresa.nome}' cadastrada.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("empresas"))
+
+    @app.route("/empresas/<int:empresa_id>", methods=["GET", "POST"])
+    @login_obrigatorio
+    def empresa_editar(empresa_id: int):
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        if request.method == "POST":
+            principal = _principal()
+            if principal is None or principal.perfil != "Administrador":
+                abort(403)
+            try:
+                repo.atualizar(
+                    empresa_id,
+                    nome=request.form.get("nome", empresa.nome),
+                    nome_saida=request.form.get("nome_saida", ""),
+                    contato_email=request.form.get("contato_email") or None,
+                    tema_primary=normalizar_cor(
+                        request.form.get("tema_primary", empresa.tema_primary or TEMA_PADRAO)
+                    ),
+                    ativa=request.form.get("ativa", "1") == "1",
+                )
+                flash("Empresa atualizada.", "ok")
+                return redirect(url_for("empresas"))
+            except ValueError as exc:
+                flash(str(exc), "erro")
+        return render_template(
+            "empresa_editar.html", empresa=empresa, presets=PRESETS
+        )
+
+    @app.route("/empresas/<int:empresa_id>/alternar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresas_alternar(empresa_id: int):
+        EmpresaRepository(_db()).alternar_ativa(empresa_id)
+        return redirect(request.referrer or url_for("empresas"))
+
+    @app.route("/empresas/<int:empresa_id>/remover", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresas_remover(empresa_id: int):
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        repo.remover(empresa_id)
+        flash(f"Empresa '{empresa.nome}' removida.", "ok")
+        return redirect(url_for("empresas"))
+
     # -- Placeholders navegáveis (próximas iterações) -----------------------
     _pagina_em_construcao(app, "newsletter_nova", "/newsletter/new", "Criar Newsletter")
     _pagina_em_construcao(app, "newsletter_preparo", "/newsletter/prepare", "Preparo do Texto")
     _pagina_em_construcao(app, "layout", "/layout", "Editor de Layout")
     _pagina_em_construcao(app, "auditoria", "/audit", "Auditoria")
-    _pagina_em_construcao(app, "parceiros", "/partners", "Parceiros")
 
     # -- Erros --------------------------------------------------------------
     @app.errorhandler(403)

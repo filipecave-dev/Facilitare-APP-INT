@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "informativoli"
+name = "informativo"
 version = "0.1.0"
-description = "InformaTivoli — gestão de informações capturadas em diversos provedores (fontes)."
+description = "Informativo — gestão de informações capturadas em diversos provedores (fontes)."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -17,14 +17,14 @@ dev = ["pytest>=7.0"]
 prod = ["gunicorn>=21.2"]
 
 [project.scripts]
-informativoli-web = "informativoli.web.cli:main"
+informativo-web = "informativo.web.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-"informativoli" = ["seed_data/*.json"]
-"informativoli.web" = ["templates/*.html", "static/*.css"]
+"informativo" = ["seed_data/*.json"]
+"informativo.web" = ["templates/*.html", "static/*.css"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Empresas — Informativo{% endblock %}
+{% set pode_gerir = principal.perfil == 'Administrador' %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Empresas (Clientes)</h1>
+    <p class="muted">Cada empresa é um cliente do sistema e personaliza o seu
+       <strong>nome de saída</strong> — o nome exibido no informativo enviado.</p>
+  </div>
+</div>
+
+{% if pode_gerir %}
+<div class="card">
+  <h2>Cadastrar empresa</h2>
+  <form method="post" action="{{ url_for('empresas_adicionar') }}">
+    <div class="grid">
+      <label>Nome da empresa
+        <input type="text" name="nome" required placeholder="Ex.: Acme Viagens Ltda.">
+      </label>
+      <label>Nome de saída
+        <input type="text" name="nome_saida" placeholder="Ex.: Acme Alertas (padrão: nome da empresa)">
+      </label>
+      <label>E-mail de contato
+        <input type="email" name="contato_email" placeholder="contato@empresa.com">
+      </label>
+      <label>Cor de destaque
+        <input type="color" name="tema_primary" value="#2557d6">
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Cadastrar</button>
+    </div>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Empresas ({{ empresas|length }})</h2>
+  {% if empresas %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Empresa</th><th>Nome de saída</th><th>Contato</th>
+          <th>Cor</th><th>Situação</th>{% if pode_gerir %}<th>Ações</th>{% endif %}
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in empresas %}
+        <tr>
+          <td>{{ e.nome }}</td>
+          <td><strong>{{ e.nome_saida }}</strong></td>
+          <td class="muted">{{ e.contato_email or '—' }}</td>
+          <td><span class="dot" style="display:inline-block;width:16px;height:16px;border-radius:50%;background:{{ e.tema_primary or '#2557d6' }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)"></span></td>
+          <td>{% if e.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
+          {% if pode_gerir %}
+          <td>
+            <a class="btn btn-sm" href="{{ url_for('empresa_editar', empresa_id=e.id) }}">Editar</a>
+            <form class="inline-form" method="post" action="{{ url_for('empresas_alternar', empresa_id=e.id) }}">
+              <button type="submit" class="btn btn-sm">{{ 'Desativar' if e.ativa else 'Ativar' }}</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('empresas_remover', empresa_id=e.id) }}"
+                  onsubmit="return confirm('Remover a empresa {{ e.nome }}?');">
+              <button type="submit" class="btn btn-sm btn-danger">Remover</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma empresa cadastrada ainda.</p>
+  {% endif %}
+</div>
+{% endblock %}

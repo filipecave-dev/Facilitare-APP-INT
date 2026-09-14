@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Painel — InformaTivoli{% endblock %}
+{% block title %}Painel — Informativo{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -13,7 +13,7 @@
   <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Fontes cadastradas</span></div>
   <div class="card stat"><span class="num">{{ resumo.ativas }}</span><span class="lbl">Fontes ativas</span></div>
   <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
-  <div class="card stat"><span class="num">{{ resumo.regioes }}</span><span class="lbl">Países/Regiões</span></div>
+  <div class="card stat"><span class="num">{{ total_empresas }}</span><span class="lbl">Empresas (clientes)</span></div>
 </div>
 
 <div class="card">

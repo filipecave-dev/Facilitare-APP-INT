@@ -5,6 +5,6 @@ Expõe a variável ``app`` esperada por ``gunicorn wsgi:app``. A configuração
 README, seção *Deploy no Render*.
 """
 
-from informativoli.web import create_app
+from informativo.web import create_app
 
 app = create_app()

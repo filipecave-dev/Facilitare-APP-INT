@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Fontes — InformaTivoli{% endblock %}
+{% block title %}Fontes — Informativo{% endblock %}
 {% set pode_editar = principal.perfil in ('Administrador', 'Editor') %}
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Gerenciar Fontes</h1>
-    <p class="muted">Provedores de onde o InformaTivoli captura informações a buscar.</p>
+    <p class="muted">Provedores de onde o Informativo captura informações a buscar.</p>
   </div>
   {% if pode_editar %}
   <form class="inline-form" method="post" action="{{ url_for('fontes_importar') }}"
