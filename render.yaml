@@ -1,9 +1,12 @@
-# Blueprint do Render para o Informativo.
+# Blueprint do Render para o Informativo (serviço "CentralInformativo").
 # No painel do Render: New + > Blueprint > selecione este repositório.
 # Depois defina INFORMATIVO_ADMIN_PASSWORD (marcada como "sync: false").
 services:
   - type: web
-    name: informativo
+    # Nome do serviço no Render = subdomínio da URL pública.
+    # "informativo" já está em uso, então usamos "CentralInformativo"
+    # (a marca do produto continua sendo "Informativo").
+    name: CentralInformativo
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt && pip install ."

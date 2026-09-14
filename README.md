@@ -101,7 +101,7 @@ gunicorn) e `Procfile`. Passo a passo:
    - `INFORMATIVO_ADMIN_USERNAME` — `admin` (ajuste se quiser).
 3. **Create** / **Deploy**. Na primeira subida o sistema cria as tabelas,
    semeia as 80 fontes e cria o usuário admin a partir das variáveis acima.
-4. Acesse a URL pública (`https://informativo.onrender.com`) e faça login.
+4. Acesse a URL pública (`https://centralinformativo.onrender.com`) e faça login.
 
 Comandos usados pelo Render (já no blueprint):
 
