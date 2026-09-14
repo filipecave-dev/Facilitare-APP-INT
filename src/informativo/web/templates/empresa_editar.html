@@ -5,7 +5,8 @@
 <div class="page-head">
   <div>
     <h1>Editar empresa</h1>
-    <p class="muted">Personalize o nome de saída e a identidade desta empresa.</p>
+    <p class="muted">Personalize o nome da solução, o assunto do e-mail e a
+       identidade desta empresa.</p>
   </div>
   <a class="btn" href="{{ url_for('empresas') }}">Voltar</a>
 </div>
@@ -16,9 +17,13 @@
       <label>Nome da empresa
         <input type="text" name="nome" value="{{ empresa.nome }}" required {{ '' if pode_gerir else 'disabled' }}>
       </label>
-      <label>Nome de saída
-        <input type="text" name="nome_saida" value="{{ empresa.nome_saida }}"
-               placeholder="Nome exibido no informativo" {{ '' if pode_gerir else 'disabled' }}>
+      <label>Nome da solução
+        <input type="text" name="nome_solucao" value="{{ empresa.nome_solucao }}"
+               placeholder="Como a solução é chamada para este cliente" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label>Assunto do e-mail
+        <input type="text" name="assunto_email" value="{{ empresa.assunto_email }}"
+               placeholder="Assunto que sai no e-mail deste cliente" {{ '' if pode_gerir else 'disabled' }}>
       </label>
       <label>E-mail de contato
         <input type="email" name="contato_email" value="{{ empresa.contato_email or '' }}" {{ '' if pode_gerir else 'disabled' }}>
@@ -30,11 +35,15 @@
         <input type="checkbox" name="ativa" value="1" {{ 'checked' if empresa.ativa }} {{ '' if pode_gerir else 'disabled' }}> Empresa ativa
       </label>
     </div>
-    <p class="help">Prévia do nome de saída:
-      <span class="pill" style="background: {{ empresa.tema_primary or '#2557d6' }}; color:#fff">{{ empresa.nome_saida }}</span>
-    </p>
+    <p class="help">Prévia do e-mail deste cliente:</p>
+    <div class="card note" style="margin:0">
+      <div><span class="muted">Assunto:</span> <strong>{{ empresa.assunto_email }}</strong></div>
+      <div><span class="muted">Solução:</span>
+        <span class="pill" style="background: {{ empresa.tema_primary or '#2557d6' }}; color:#fff">{{ empresa.nome_solucao }}</span>
+      </div>
+    </div>
     {% if pode_gerir %}
-    <div class="form-actions">
+    <div class="form-actions" style="margin-top:16px">
       <button type="submit" class="btn btn-primary">Salvar alterações</button>
     </div>
     {% else %}

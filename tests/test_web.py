@@ -70,15 +70,17 @@ def test_adicionar_e_remover_fonte(client):
     assert "Fonte Teste".encode() in resp.data
 
 
-def test_cadastrar_empresa_com_nome_de_saida(client):
+def test_cadastrar_empresa_com_nome_solucao_e_assunto(client):
     _login(client)
     resp = client.post(
         "/empresas/adicionar",
-        data={"nome": "Acme Viagens", "nome_saida": "Acme Alertas",
+        data={"nome": "Acme Viagens", "nome_solucao": "Acme Alertas",
+              "assunto_email": "Boletim de Viagem Acme",
               "contato_email": "", "tema_primary": "#1c7a43", "ativa": "1"},
         follow_redirects=True,
     )
     assert "Acme Alertas".encode() in resp.data
+    assert "Boletim de Viagem Acme".encode() in resp.data
     assert "Acme Viagens".encode() in resp.data
 
 

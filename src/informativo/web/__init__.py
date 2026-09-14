@@ -313,7 +313,8 @@ def _registrar(app: Flask) -> None:
         try:
             empresa = repo.criar(
                 request.form.get("nome", ""),
-                nome_saida=request.form.get("nome_saida") or None,
+                nome_solucao=request.form.get("nome_solucao") or None,
+                assunto_email=request.form.get("assunto_email") or None,
                 contato_email=request.form.get("contato_email") or None,
                 tema_primary=normalizar_cor(request.form.get("tema_primary", TEMA_PADRAO)),
                 ativa=request.form.get("ativa", "1") == "1",
@@ -338,7 +339,8 @@ def _registrar(app: Flask) -> None:
                 repo.atualizar(
                     empresa_id,
                     nome=request.form.get("nome", empresa.nome),
-                    nome_saida=request.form.get("nome_saida", ""),
+                    nome_solucao=request.form.get("nome_solucao", ""),
+                    assunto_email=request.form.get("assunto_email", ""),
                     contato_email=request.form.get("contato_email") or None,
                     tema_primary=normalizar_cor(
                         request.form.get("tema_primary", empresa.tema_primary or TEMA_PADRAO)

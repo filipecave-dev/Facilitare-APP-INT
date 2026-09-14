@@ -20,8 +20,10 @@ Totalmente funcional:
   adicionar, importar em massa, ativar/desativar e remover. Semeado com as 80
   fontes da planilha.
 - **Empresas (Clientes)** — cadastro das empresas que usam a solução. Cada
-  empresa é um cliente e personaliza o seu **nome de saída** (o nome exibido no
-  informativo enviado), além de e-mail de contato e cor de destaque própria.
+  empresa é um cliente e personaliza o seu **nome da solução** (como o
+  informativo é chamado para aquele cliente) e o **assunto do e-mail** que sai
+  para os seus destinatários, além de e-mail de contato e cor de destaque
+  própria.
 - **Configurações** — seletor de tema/cores (presets + cor personalizada,
   padrão azul) e chaves de integração (E-mail e Omniroute), persistidas para
   uso futuro.

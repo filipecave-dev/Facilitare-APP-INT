@@ -1,9 +1,14 @@
 """Cadastro de empresas (clientes) do Informativo.
 
 Cada **empresa** é um cliente cadastrado dentro do sistema. Além do nome de
-cadastro, cada empresa personaliza o seu **nome de saída** (``nome_saida``) — o
-nome exibido no informativo/newsletter que ela envia — e, opcionalmente, uma
-cor de destaque própria (``tema_primary``).
+cadastro, cada empresa personaliza:
+
+* **Nome da solução** (``nome_solucao``) — como a solução/o informativo é
+  chamado para aquele cliente (a marca do boletim que ele envia).
+* **Assunto do e-mail** (``assunto_email``) — o assunto que sai no e-mail
+  enviado por aquele cliente.
+
+Opcionalmente, também uma cor de destaque própria (``tema_primary``).
 """
 
 from __future__ import annotations
@@ -21,7 +26,8 @@ class Empresa:
 
     id: int
     nome: str
-    nome_saida: str
+    nome_solucao: str
+    assunto_email: str = ""
     contato_email: Optional[str] = None
     tema_primary: Optional[str] = None
     ativa: bool = True
@@ -33,7 +39,8 @@ def _row_para_empresa(row: dict) -> Empresa:
     return Empresa(
         id=row["id"],
         nome=row["nome"],
-        nome_saida=row["nome_saida"],
+        nome_solucao=row["nome_solucao"],
+        assunto_email=row.get("assunto_email") or "",
         contato_email=row.get("contato_email"),
         tema_primary=row.get("tema_primary"),
         ativa=bool(row.get("ativa", 1)),
@@ -84,7 +91,8 @@ class EmpresaRepository:
         self,
         nome: str,
         *,
-        nome_saida: Optional[str] = None,
+        nome_solucao: Optional[str] = None,
+        assunto_email: Optional[str] = None,
         contato_email: Optional[str] = None,
         tema_primary: Optional[str] = None,
         ativa: bool = True,
@@ -94,13 +102,16 @@ class EmpresaRepository:
             raise ValueError("O nome da empresa é obrigatório.")
         if self.existe_nome(nome):
             raise ValueError(f"Já existe uma empresa com o nome {nome!r}.")
-        # Por padrão, o nome de saída começa igual ao nome da empresa.
-        nome_saida = (nome_saida or "").strip() or nome
+        # Nome da solução: por padrão, o próprio nome da empresa.
+        nome_solucao = (nome_solucao or "").strip() or nome
+        # Assunto do e-mail: por padrão, acompanha o nome da solução.
+        assunto_email = (assunto_email or "").strip() or nome_solucao
         agora = self._agora()
         cur = self.db.execute(
-            "INSERT INTO empresas (nome, nome_saida, contato_email, tema_primary, "
-            "ativa, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (nome, nome_saida, contato_email, tema_primary,
+            "INSERT INTO empresas (nome, nome_solucao, assunto_email, contato_email, "
+            "tema_primary, ativa, criado_em, atualizado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (nome, nome_solucao, assunto_email, contato_email, tema_primary,
              1 if ativa else 0, agora, agora),
         )
         self.db.commit()
@@ -109,7 +120,10 @@ class EmpresaRepository:
         return empresa
 
     def atualizar(self, empresa_id: int, **campos) -> None:
-        permitidos = {"nome", "nome_saida", "contato_email", "tema_primary", "ativa"}
+        permitidos = {
+            "nome", "nome_solucao", "assunto_email",
+            "contato_email", "tema_primary", "ativa",
+        }
         empresa = self.get(empresa_id)
         if empresa is None:
             raise ValueError("Empresa não encontrada.")
@@ -119,11 +133,16 @@ class EmpresaRepository:
                 raise ValueError("O nome da empresa é obrigatório.")
             if self.existe_nome(novo, ignorar_id=empresa_id):
                 raise ValueError(f"Já existe uma empresa com o nome {novo!r}.")
-        if "nome_saida" in campos:
-            # Nome de saída vazio volta a acompanhar o nome da empresa.
-            campos["nome_saida"] = (campos["nome_saida"] or "").strip() or (
-                (campos.get("nome") or empresa.nome).strip()
-            )
+        nome_ref = (campos.get("nome") or empresa.nome).strip()
+        if "nome_solucao" in campos:
+            # Nome da solução vazio volta a acompanhar o nome da empresa.
+            campos["nome_solucao"] = (campos["nome_solucao"] or "").strip() or nome_ref
+        if "assunto_email" in campos:
+            # Assunto vazio volta a acompanhar o nome da solução.
+            solucao_ref = (
+                campos.get("nome_solucao") or empresa.nome_solucao or nome_ref
+            ).strip()
+            campos["assunto_email"] = (campos["assunto_email"] or "").strip() or solucao_ref
         sets, params = [], []
         for chave, valor in campos.items():
             if chave not in permitidos:

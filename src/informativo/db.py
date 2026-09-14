@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS fontes (
 CREATE TABLE IF NOT EXISTS empresas (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     nome          TEXT    NOT NULL UNIQUE,
-    nome_saida    TEXT    NOT NULL,
+    nome_solucao  TEXT    NOT NULL,
+    assunto_email TEXT    NOT NULL DEFAULT '',
     contato_email TEXT,
     tema_primary  TEXT,
     ativa         INTEGER NOT NULL DEFAULT 1,

@@ -5,8 +5,9 @@
 <div class="page-head">
   <div>
     <h1>Empresas (Clientes)</h1>
-    <p class="muted">Cada empresa é um cliente do sistema e personaliza o seu
-       <strong>nome de saída</strong> — o nome exibido no informativo enviado.</p>
+    <p class="muted">Cada empresa é um cliente do sistema e personaliza o
+       <strong>nome da solução</strong> e o <strong>assunto do e-mail</strong>
+       que sai para os seus destinatários.</p>
   </div>
 </div>
 
@@ -18,8 +19,11 @@
       <label>Nome da empresa
         <input type="text" name="nome" required placeholder="Ex.: Acme Viagens Ltda.">
       </label>
-      <label>Nome de saída
-        <input type="text" name="nome_saida" placeholder="Ex.: Acme Alertas (padrão: nome da empresa)">
+      <label>Nome da solução
+        <input type="text" name="nome_solucao" placeholder="Ex.: Acme Alertas (padrão: nome da empresa)">
+      </label>
+      <label>Assunto do e-mail
+        <input type="text" name="assunto_email" placeholder="Ex.: Boletim de Viagem Acme (padrão: nome da solução)">
       </label>
       <label>E-mail de contato
         <input type="email" name="contato_email" placeholder="contato@empresa.com">
@@ -42,15 +46,16 @@
     <table>
       <thead>
         <tr>
-          <th>Empresa</th><th>Nome de saída</th><th>Contato</th>
-          <th>Cor</th><th>Situação</th>{% if pode_gerir %}<th>Ações</th>{% endif %}
+          <th>Empresa</th><th>Nome da solução</th><th>Assunto do e-mail</th>
+          <th>Contato</th><th>Cor</th><th>Situação</th>{% if pode_gerir %}<th>Ações</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for e in empresas %}
         <tr>
           <td>{{ e.nome }}</td>
-          <td><strong>{{ e.nome_saida }}</strong></td>
+          <td><strong>{{ e.nome_solucao }}</strong></td>
+          <td>{{ e.assunto_email }}</td>
           <td class="muted">{{ e.contato_email or '—' }}</td>
           <td><span class="dot" style="display:inline-block;width:16px;height:16px;border-radius:50%;background:{{ e.tema_primary or '#2557d6' }};box-shadow:inset 0 0 0 1px rgba(0,0,0,.1)"></span></td>
           <td>{% if e.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
