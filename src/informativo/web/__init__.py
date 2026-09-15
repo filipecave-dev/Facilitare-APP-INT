@@ -389,6 +389,41 @@ def _registrar(app: Flask) -> None:
             flash(str(exc), "erro")
         return redirect(url_for("provedores"))
 
+    @app.route("/provedores/<int:pid>/editar", methods=["GET", "POST"])
+    @perfil_obrigatorio("Administrador")
+    def provedores_editar(pid: int):
+        from ..provedores import ProvedorRepository
+
+        repo = ProvedorRepository(_db())
+        p = repo.get(pid)
+        if p is None:
+            abort(404)
+        if request.method == "POST":
+            emp = request.form.get("empresa_id") or None
+            campos = {
+                "nome": request.form.get("nome", p.nome),
+                "formato": request.form.get("formato", p.formato),
+                "base_url": request.form.get("base_url", p.base_url),
+                "modelo": request.form.get("modelo", p.modelo),
+                "empresa_id": int(emp) if emp else None,
+                "ativo": request.form.get("ativo", "1") == "1",
+            }
+            # Chave só é trocada se o campo vier preenchido.
+            nova_chave = (request.form.get("api_key") or "").strip()
+            if nova_chave:
+                campos["api_key"] = nova_chave
+            try:
+                repo.atualizar(pid, **campos)
+                flash("Provedor atualizado.", "ok")
+                return redirect(url_for("provedores"))
+            except ValueError as exc:
+                flash(str(exc), "erro")
+        return render_template(
+            "provedor_editar.html",
+            p=repo.get(pid),
+            empresas=EmpresaRepository(_db()).listar(),
+        )
+
     @app.route("/provedores/<int:pid>/alternar", methods=["POST"])
     @perfil_obrigatorio("Administrador")
     def provedores_alternar(pid: int):

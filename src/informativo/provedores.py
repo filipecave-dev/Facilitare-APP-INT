@@ -254,6 +254,33 @@ class ProvedorRepository:
         assert p is not None
         return p
 
+    def atualizar(self, pid: int, **campos) -> None:
+        """Atualiza um provedor. ``api_key`` só é alterada se vier preenchida
+        (deixe em branco para manter a chave atual)."""
+        permitidos = {"nome", "formato", "base_url", "modelo",
+                      "api_key", "empresa_id", "ativo"}
+        if self.get(pid) is None:
+            raise ValueError("Provedor não encontrado.")
+        if "formato" in campos and campos["formato"] not in FORMATOS:
+            raise ValueError(f"Formato inválido: {campos['formato']!r}.")
+        sets, params = [], []
+        for chave, valor in campos.items():
+            if chave not in permitidos:
+                continue
+            if chave == "ativo":
+                valor = 1 if valor else 0
+            if isinstance(valor, str):
+                valor = valor.strip()
+            sets.append(f"{chave} = ?")
+            params.append(valor)
+        if not sets:
+            return
+        params.append(pid)
+        self.db.execute(
+            f"UPDATE provedores_ia SET {', '.join(sets)} WHERE id = ?", params
+        )
+        self.db.commit()
+
     def alternar_ativo(self, pid: int) -> None:
         self.db.execute(
             "UPDATE provedores_ia SET ativo = 1 - ativo WHERE id = ?", (pid,)

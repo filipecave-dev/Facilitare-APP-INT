@@ -60,6 +60,27 @@ def test_provedor_validacoes(db):
         pr.criar("X", "openai", "", "m")
 
 
+def test_atualizar_preserva_chave_quando_ausente(db):
+    pr = ProvedorRepository(db)
+    p = pr.criar("Gemini", "openai", "http://x/v1beta/openai", "gemini-flash-latest",
+                 api_key="chave-antiga")
+    # Atualiza sem mexer na chave.
+    pr.atualizar(p.id, modelo="gemini-2.0-flash")
+    atual = pr.get(p.id)
+    assert atual.modelo == "gemini-2.0-flash"
+    assert atual.api_key == "chave-antiga"
+    # Agora troca a chave.
+    pr.atualizar(p.id, api_key="chave-nova")
+    assert pr.get(p.id).api_key == "chave-nova"
+
+
+def test_atualizar_formato_invalido(db):
+    pr = ProvedorRepository(db)
+    p = pr.criar("X", "openai", "http://x", "m")
+    with pytest.raises(ValueError):
+        pr.atualizar(p.id, formato="zzz")
+
+
 def test_alternar_e_remover(db):
     pr = ProvedorRepository(db)
     p = pr.criar("X", "openai", "http://x", "m")

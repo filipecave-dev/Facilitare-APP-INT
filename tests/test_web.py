@@ -153,6 +153,29 @@ def test_novo_usuario_consegue_logar(app):
     assert b"Painel Principal" in resp.data
 
 
+def test_editar_provedor(client, app):
+    _login(client)
+    client.post("/provedores/criar", data={
+        "nome": "Gemini", "formato": "openai",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "modelo": "gemini-flash-latest", "api_key": "k1", "empresa_id": "", "ativo": "1",
+    }, follow_redirects=True)
+    from informativo.provedores import ProvedorRepository
+    with Database(app.config["DSN"]) as db:
+        pid = ProvedorRepository(db).listar()[0].id
+    # edita o modelo, deixa a chave em branco (deve manter)
+    resp = client.post(f"/provedores/{pid}/editar", data={
+        "nome": "Gemini", "formato": "openai",
+        "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "modelo": "gemini-2.0-flash", "api_key": "", "empresa_id": "", "ativo": "1",
+    }, follow_redirects=True)
+    assert "atualizado".encode() in resp.data
+    with Database(app.config["DSN"]) as db:
+        p = ProvedorRepository(db).get(pid)
+    assert p.modelo == "gemini-2.0-flash"
+    assert p.api_key == "k1"  # chave preservada
+
+
 def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
     _login(client)
     # cadastra um provedor de IA

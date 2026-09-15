@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ p.nome }} — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Editar provedor</h1>
+    <p class="muted">Ajuste a conexão sem precisar recriá-la.</p>
+  </div>
+  <a class="btn" href="{{ url_for('provedores') }}">Voltar</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('provedores_editar', pid=p.id) }}">
+    <div class="grid">
+      <label>Nome
+        <input type="text" name="nome" value="{{ p.nome }}" required>
+      </label>
+      <label>Formato
+        <select name="formato">
+          <option value="openai" {{ 'selected' if p.formato == 'openai' }}>OpenAI-compatible (OmniRoute, GPT, DeepSeek, Gemini…)</option>
+          <option value="anthropic" {{ 'selected' if p.formato == 'anthropic' }}>Anthropic (Claude direto)</option>
+        </select>
+      </label>
+      <label>URL base
+        <input type="text" name="base_url" value="{{ p.base_url }}" required>
+      </label>
+      <label>Modelo
+        <input type="text" name="modelo" value="{{ p.modelo }}" required>
+      </label>
+      <label>Chave de API
+        <input type="password" name="api_key" placeholder="•••••••• (em branco = manter a atual)" autocomplete="off">
+      </label>
+      <label>Empresa (cliente)
+        <select name="empresa_id">
+          <option value="">Global (do sistema)</option>
+          {% for e in empresas %}<option value="{{ e.id }}" {{ 'selected' if e.id == p.empresa_id }}>{{ e.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="ativo" value="1" {{ 'checked' if p.ativo }}> Ativo
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Salvar alterações</button>
+      <a class="btn" href="{{ url_for('provedores') }}">Cancelar</a>
+    </div>
+  </form>
+  <p class="help">Deixe a <strong>Chave de API</strong> em branco para manter a
+     atual; preencha apenas se quiser trocá-la.</p>
+</div>
+{% endblock %}

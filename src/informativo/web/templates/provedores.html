@@ -74,6 +74,7 @@
           <td>{% if p.empresa_id %}{% for e in empresas %}{% if e.id == p.empresa_id %}{{ e.nome }}{% endif %}{% endfor %}{% else %}<span class="muted">Global</span>{% endif %}</td>
           <td>{% if p.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
           <td>
+            <a class="btn btn-sm" href="{{ url_for('provedores_editar', pid=p.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('provedores_testar', pid=p.id) }}">
               <button type="submit" class="btn btn-sm">Testar</button>
             </form>
