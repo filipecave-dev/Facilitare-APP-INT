@@ -341,12 +341,16 @@ def _registrar(app: Flask) -> None:
     @app.route("/settings", methods=["GET", "POST"])
     @login_obrigatorio
     def settings():
+        from ..omniroute import CFG_CHAVE, CFG_MODELO, CFG_URL
+
         repo = SettingsRepository(_db())
         if request.method == "POST":
             cor = normalizar_cor(request.form.get("tema_primary", TEMA_PADRAO))
             repo.set(CHAVE_TEMA, cor)
             repo.set("api_email", request.form.get("api_email", "").strip())
-            repo.set("api_omniroute", request.form.get("api_omniroute", "").strip())
+            repo.set(CFG_CHAVE, request.form.get("api_omniroute", "").strip())
+            repo.set(CFG_URL, request.form.get("omniroute_url", "").strip())
+            repo.set(CFG_MODELO, request.form.get("omniroute_modelo", "").strip())
             flash("Configurações salvas.", "ok")
             return redirect(url_for("settings"))
         return render_template(
@@ -354,8 +358,82 @@ def _registrar(app: Flask) -> None:
             presets=PRESETS,
             cor_atual=repo.get(CHAVE_TEMA, TEMA_PADRAO),
             api_email=repo.get("api_email", ""),
-            api_omniroute=repo.get("api_omniroute", ""),
+            api_omniroute=repo.get(CFG_CHAVE, ""),
+            omniroute_url=repo.get(CFG_URL, ""),
+            omniroute_modelo=repo.get(CFG_MODELO, ""),
         )
+
+    @app.route("/settings/testar-omniroute", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def settings_testar_omniroute():
+        from ..omniroute import OmnirouteError, client_from_settings
+
+        cli = client_from_settings(SettingsRepository(_db()), timeout=30)
+        try:
+            resposta = cli.chat("Responda apenas: OK", max_tokens=10)
+            flash(f"Omniroute respondeu: {resposta[:120]}", "ok")
+        except OmnirouteError as exc:
+            flash(f"Falha no Omniroute: {exc}", "erro")
+        return redirect(url_for("settings"))
+
+    # -- Captação (Omniroute) ----------------------------------------------
+    @app.route("/captacao")
+    @login_obrigatorio
+    def captacao():
+        from ..omniroute import CaptacaoRepository, client_from_settings
+
+        cli = client_from_settings(SettingsRepository(_db()))
+        return render_template(
+            "captacao.html",
+            captacoes=CaptacaoRepository(_db()).listar_recentes(50),
+            configurado=cli.configurado(),
+            total_ativas=FonteRepository(_db()).resumo()["ativas"],
+        )
+
+    @app.route("/captacao/rodar", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_rodar():
+        from ..omniroute import (
+            CaptacaoRepository,
+            OmnirouteError,
+            client_from_settings,
+            prompt_para_fonte,
+        )
+
+        try:
+            quantidade = int(request.form.get("quantidade", 5))
+        except (TypeError, ValueError):
+            quantidade = 5
+        quantidade = max(1, min(15, quantidade))
+
+        cli = client_from_settings(SettingsRepository(_db()))
+        if not cli.configurado():
+            flash("Configure a URL e o modelo do Omniroute em Configurações.", "erro")
+            return redirect(url_for("captacao"))
+
+        repo_fontes = FonteRepository(_db())
+        repo_cap = CaptacaoRepository(_db())
+        fontes = repo_fontes.listar(apenas_ativas=True)[:quantidade]
+        ok = falhas = 0
+        primeiro_erro = None
+        for fonte in fontes:
+            system, prompt = prompt_para_fonte(fonte)
+            try:
+                texto = cli.chat(prompt, system=system)
+                repo_cap.registrar(fonte, texto)
+                ok += 1
+            except OmnirouteError as exc:
+                falhas += 1
+                if primeiro_erro is None:
+                    primeiro_erro = str(exc)
+        if ok:
+            flash(f"Captação concluída: {ok} fonte(s) resumida(s).", "ok")
+        if falhas:
+            flash(
+                f"{falhas} fonte(s) falharam. Primeiro erro: {primeiro_erro}",
+                "erro" if not ok else "aviso",
+            )
+        return redirect(url_for("captacao"))
 
     # -- Empresas (clientes) ------------------------------------------------
     @app.route("/empresas")

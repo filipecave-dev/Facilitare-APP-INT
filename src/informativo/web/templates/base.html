@@ -19,6 +19,7 @@
   <nav class="mainnav">
     <a href="{{ url_for('dashboard') }}" class="{{ 'ativo' if request.endpoint == 'dashboard' }}">Início</a>
     <a href="{{ url_for('fontes') }}" class="{{ 'ativo' if request.endpoint == 'fontes' }}">Fontes</a>
+    <a href="{{ url_for('captacao') }}" class="{{ 'ativo' if request.endpoint == 'captacao' }}">Captação</a>
     <a href="{{ url_for('empresas') }}" class="{{ 'ativo' if request.endpoint in ('empresas', 'empresa_editar') }}">Empresas</a>
     <a href="{{ url_for('newsletter_nova') }}">Newsletter</a>
     <a href="{{ url_for('auditoria') }}">Auditoria</a>

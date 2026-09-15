@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Captação — Informativo{% endblock %}
+{% set pode_rodar = principal.perfil in ('Administrador', 'Editor') %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Captação (Omniroute)</h1>
+    <p class="muted">Resumo por fonte ativa, gerado pelas IAs conectadas ao Omniroute.</p>
+  </div>
+</div>
+
+{% if not configurado %}
+<div class="card note">
+  <p>⚙️ O Omniroute ainda não está configurado. Vá em
+     <a href="{{ url_for('settings') }}">Configurações</a> e informe a
+     <strong>URL base</strong> e o <strong>modelo</strong>.</p>
+</div>
+{% endif %}
+
+{% if pode_rodar %}
+<div class="card">
+  <h2>Rodar captação</h2>
+  <form method="post" action="{{ url_for('captacao_rodar') }}" class="form-actions"
+        onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='Processando…';">
+    <label style="max-width:220px">Quantas fontes ativas (por prioridade)
+      <input type="number" name="quantidade" value="5" min="1" max="15">
+    </label>
+    <button type="submit" class="btn btn-primary" {{ '' if configurado else 'disabled' }}>Rodar agora</button>
+    <span class="muted">{{ total_ativas }} fontes ativas no total. Processa as de maior prioridade.</span>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>Resultados recentes ({{ captacoes|length }})</h2>
+  {% if captacoes %}
+    {% for c in captacoes %}
+    <div class="card note" style="margin-bottom:12px">
+      <div class="page-head" style="margin-bottom:6px">
+        <strong>{{ c.fonte_nome }}</strong>
+        <span class="muted">{{ (c.criado_em or '')[:16].replace('T',' ') }}</span>
+      </div>
+      <div class="muted" style="font-size:13px;margin-bottom:6px">
+        {{ c.categoria or '—' }}{% if c.regiao %} · {{ c.regiao }}{% endif %}
+      </div>
+      <div style="white-space:pre-wrap">{{ c.conteudo }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+  <p class="muted">Nenhuma captação ainda. Configure o Omniroute e clique em “Rodar agora”.</p>
+  {% endif %}
+</div>
+{% endblock %}

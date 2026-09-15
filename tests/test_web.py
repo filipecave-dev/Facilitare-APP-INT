@@ -153,6 +153,24 @@ def test_novo_usuario_consegue_logar(app):
     assert b"Painel Principal" in resp.data
 
 
+def test_salvar_e_rodar_captacao(client, app, monkeypatch):
+    _login(client)
+    # configura Omniroute
+    client.post("/settings", data={
+        "tema_primary": "#2557d6", "api_email": "",
+        "api_omniroute": "chave", "omniroute_url": "http://x:20128",
+        "omniroute_modelo": "deepseek-chat",
+    }, follow_redirects=True)
+    # mocka a chamada ao modelo
+    monkeypatch.setattr(
+        "informativo.omniroute.OmnirouteClient.chat",
+        lambda self, prompt, **kw: "Resumo simulado da fonte.",
+    )
+    resp = client.post("/captacao/rodar", data={"quantidade": "3"}, follow_redirects=True)
+    assert "Captação concluída".encode() in resp.data
+    assert "Resumo simulado da fonte.".encode() in resp.data
+
+
 def test_salvar_tema(client, app):
     _login(client)
     client.post(

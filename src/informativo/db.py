@@ -58,6 +58,16 @@ CREATE TABLE IF NOT EXISTS empresas (
     atualizado_em TEXT
 );
 
+CREATE TABLE IF NOT EXISTS captacoes (
+    id         {pk},
+    fonte_id   INTEGER,
+    fonte_nome TEXT,
+    categoria  TEXT,
+    regiao     TEXT,
+    conteudo   TEXT,
+    criado_em  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS configuracoes (
     chave TEXT PRIMARY KEY,
     valor TEXT
