@@ -316,6 +316,16 @@ class FonteRepository:
         self.db.commit()
         return atualizadas
 
+    def ativar_com_rss_global(self) -> int:
+        """Ativa as fontes globais que têm feed RSS cadastrado. Retorna quantas."""
+        cur = self.db.execute(
+            "UPDATE fontes SET ativa = 1, atualizado_em = ? "
+            "WHERE empresa_id IS NULL AND rss IS NOT NULL AND rss <> ''",
+            (self._agora(),),
+        )
+        self.db.commit()
+        return getattr(cur, "rowcount", 0) or 0
+
     def promover_para_global(self, fonte_id: int) -> None:
         """Torna uma fonte privada parte do catálogo global (empresa_id nulo)."""
         self.db.execute(
@@ -365,11 +375,11 @@ class FonteRepository:
         """
         if self.count() > 0:
             return 0
-        # As fontes-semente entram DESATIVADAS por padrão: a ativação é uma
-        # decisão explícita (o operador liga o que vai monitorar).
+        # Padrão: entram ATIVAS apenas as fontes que têm feed RSS cadastrado
+        # (melhor custo-benefício); as demais entram desativadas.
         itens = carregar_seed()
         for it in itens:
-            it["ativa"] = False
+            it["ativa"] = bool(it.get("rss"))
         resultado = self.importar(itens)
         return resultado["inseridas"]
 

@@ -130,11 +130,24 @@ def test_semear_se_vazio(db):
     inseridas = repo.semear_se_vazio()
     assert inseridas == 80
     assert repo.count() == 80
-    # Semente entra DESATIVADA (ativação é decisão explícita do operador).
-    assert all(not f.ativa for f in repo.listar())
+    # Padrão: entram ATIVAS as fontes com RSS; sem RSS entram desativadas.
+    ativas = [f for f in repo.listar() if f.ativa]
+    assert len(ativas) >= 30
+    assert all(f.rss for f in ativas)
+    assert all(not f.ativa for f in repo.listar() if not f.rss)
     # Idempotente: não duplica.
     assert repo.semear_se_vazio() == 0
     assert repo.count() == 80
+
+
+def test_ativar_com_rss_global(db):
+    repo = FonteRepository(db)
+    repo.semear_se_vazio()
+    repo.definir_ativa_em_massa(False)  # zera tudo
+    n = repo.ativar_com_rss_global()
+    assert n >= 30
+    ativas = [f for f in repo.listar() if f.ativa]
+    assert ativas and all(f.rss and f.empresa_id is None for f in ativas)
 
 
 def test_ativar_desativar_em_massa(db):

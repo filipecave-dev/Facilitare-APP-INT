@@ -69,6 +69,10 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_rss_backfill") != "1":
             FonteRepository(db).backfill_rss_da_semente()
             sett.set("fontes_rss_backfill", "1")
+        # Ativação única: as fontes globais com RSS entram ativas por padrão.
+        if sett.get("fontes_rss_ativadas") != "1":
+            FonteRepository(db).ativar_com_rss_global()
+            sett.set("fontes_rss_ativadas", "1")
 
     _registrar(app)
     return app
