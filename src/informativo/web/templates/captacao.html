@@ -28,7 +28,14 @@
         {% endfor %}
       </select>
     </label>
-    <label style="max-width:200px">Qtde de fontes (por prioridade)
+    <label style="max-width:220px">Foco / Região
+      <select name="regiao">
+        <option value="__BR__">Nacional (Brasil) — primeiro</option>
+        <option value="">Todas as regiões</option>
+        {% for r in regioes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+      </select>
+    </label>
+    <label style="max-width:160px">Qtde de fontes
       <input type="number" name="quantidade" value="5" min="1" max="15">
     </label>
     <button type="submit" class="btn btn-primary">Rodar agora</button>

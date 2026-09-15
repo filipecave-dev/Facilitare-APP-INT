@@ -195,11 +195,16 @@ def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
     )
     resp = client.post(
         "/captacao/rodar",
-        data={"provedor_id": str(pid), "quantidade": "3"},
+        data={"provedor_id": str(pid), "quantidade": "3", "regiao": "__BR__"},
         follow_redirects=True,
     )
     assert "Captação concluída".encode() in resp.data
     assert "Resumo simulado da fonte.".encode() in resp.data
+    # foco nacional: só fontes do Brasil foram captadas
+    from informativo.omniroute import CaptacaoRepository
+    with Database(app.config["DSN"]) as db:
+        for c in CaptacaoRepository(db).listar_recentes(10):
+            assert "brasil" in (c["regiao"] or "").lower()
     # a captação entra como pendente e pode ser aprovada
     from informativo.omniroute import CaptacaoRepository
     with Database(app.config["DSN"]) as db:

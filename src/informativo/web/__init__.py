@@ -465,6 +465,7 @@ def _registrar(app: Flask) -> None:
 
         status = request.args.get("status") or "pendente"
         repo_cap = CaptacaoRepository(_db())
+        repo_fontes = FonteRepository(_db())
         return render_template(
             "captacao.html",
             captacoes=repo_cap.listar_recentes(80, status=status),
@@ -472,7 +473,8 @@ def _registrar(app: Flask) -> None:
             status_atual=status,
             provedores=ProvedorRepository(_db()).listar(apenas_ativos=True),
             empresas=EmpresaRepository(_db()).listar(),
-            total_ativas=FonteRepository(_db()).resumo()["ativas"],
+            regioes=repo_fontes.regioes(),
+            total_ativas=repo_fontes.resumo()["ativas"],
         )
 
     @app.route("/captacao/rodar", methods=["POST"])
@@ -498,7 +500,17 @@ def _registrar(app: Flask) -> None:
         cli = provedor.cliente()
         repo_fontes = FonteRepository(_db())
         repo_cap = CaptacaoRepository(_db())
-        fontes = repo_fontes.listar(apenas_ativas=True)[:quantidade]
+        # Foco por região. Padrão: nacional (Brasil) primeiro.
+        regiao = request.form.get("regiao", "__BR__")
+        fontes = repo_fontes.listar(apenas_ativas=True)
+        if regiao == "__BR__":
+            fontes = [f for f in fontes if "brasil" in (f.regiao or "").lower()]
+        elif regiao:
+            fontes = [f for f in fontes if f.regiao == regiao]
+        fontes = fontes[:quantidade]
+        if not fontes:
+            flash("Nenhuma fonte ativa para o foco selecionado.", "aviso")
+            return redirect(url_for("captacao"))
         ok = falhas = 0
         primeiro_erro = None
         for fonte in fontes:
