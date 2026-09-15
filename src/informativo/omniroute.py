@@ -176,22 +176,36 @@ def client_from_settings(settings_repo, timeout: int = 60) -> OmnirouteClient:
     )
 
 
-def prompt_para_fonte(fonte) -> tuple[str, str]:
-    """Monta (system, prompt) para resumir as novidades de uma fonte."""
+def prompt_para_fonte(fonte, conteudo: str = "") -> tuple[str, str]:
+    """Monta (system, prompt) para resumir as novidades de uma fonte.
+
+    Se ``conteudo`` (texto coletado da fonte) for fornecido, a IA é instruída a
+    se basear **apenas** nele — o que torna o resumo factual e atual. Sem
+    conteúdo, cai no modo genérico (conhecimento geral do modelo).
+    """
     system = (
         "Você é um analista de viagens corporativas. Resuma, de forma objetiva "
         "e em português do Brasil, as informações mais relevantes para viajantes "
         "(greves, cancelamentos, fechamentos de aeroporto, clima severo, "
-        "segurança e saúde). Seja conciso: 3 a 5 tópicos curtos. Se não houver "
-        "novidades concretas, diga isso claramente."
+        "segurança e saúde). Seja conciso: 3 a 5 tópicos curtos."
     )
     partes = [f"Fonte: {fonte.nome} ({fonte.url})."]
     if getattr(fonte, "categoria", None):
         partes.append(f"Categoria: {fonte.categoria}.")
     if getattr(fonte, "regiao", None):
         partes.append(f"Região/País: {fonte.regiao}.")
-    partes.append(
-        "Traga um resumo das novidades recentes relevantes para viajantes "
-        "relacionadas a esta fonte e região."
-    )
-    return system, " ".join(partes)
+
+    if conteudo:
+        partes.append(
+            "Baseie-se APENAS no conteúdo recente da fonte abaixo. Liste em 3 a 5 "
+            "tópicos os itens relevantes para viajantes; para cada item, inclua o "
+            "título/assunto. Ignore o que não for pertinente. Se nada no conteúdo "
+            "for relevante, responda exatamente: 'Sem itens relevantes nesta captura.'"
+            "\n\n=== CONTEÚDO DA FONTE ===\n" + conteudo
+        )
+    else:
+        partes.append(
+            "Não foi possível coletar o conteúdo recente desta fonte. Deixe claro "
+            "que não há dados coletados e sugira verificar a fonte diretamente."
+        )
+    return system, "\n".join(partes)

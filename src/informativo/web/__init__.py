@@ -511,10 +511,20 @@ def _registrar(app: Flask) -> None:
         if not fontes:
             flash("Nenhuma fonte ativa para o foco selecionado.", "aviso")
             return redirect(url_for("captacao"))
+
+        # Busca o conteúdo real da fonte (RSS/HTML) para a IA resumir fatos
+        # atuais, quando marcado (padrão). Sem isso o resumo é genérico.
+        buscar_conteudo = request.form.get("buscar_conteudo", "1") == "1"
+
         ok = falhas = 0
         primeiro_erro = None
         for fonte in fontes:
-            system, prompt = prompt_para_fonte(fonte)
+            conteudo = ""
+            if buscar_conteudo:
+                from ..coleta import coletar_conteudo
+
+                conteudo = coletar_conteudo(fonte.url)
+            system, prompt = prompt_para_fonte(fonte, conteudo)
             try:
                 texto = cli.chat(prompt, system=system)
                 repo_cap.registrar(fonte, texto, provedor=provedor.nome)

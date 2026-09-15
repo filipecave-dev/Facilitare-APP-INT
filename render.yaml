@@ -21,7 +21,7 @@ services:
     runtime: python
     plan: free
     buildCommand: "pip install -r requirements.txt && pip install ."
-    startCommand: "gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4"
+    startCommand: "gunicorn wsgi:app --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 120"
     envVars:
       # Chave de sessão gerada e mantida pelo Render.
       - key: INFORMATIVO_SECRET_KEY
