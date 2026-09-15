@@ -16,22 +16,31 @@
 {% if principal %}
 <header class="topbar">
   <div class="brand"><a href="{{ url_for('dashboard') }}">Informa<span class="dot">tivo</span></a></div>
+  {% set plat = principal.empresa_id is none %}
   <nav class="mainnav">
     <a href="{{ url_for('dashboard') }}" class="{{ 'ativo' if request.endpoint == 'dashboard' }}">Início</a>
     <a href="{{ url_for('fontes') }}" class="{{ 'ativo' if request.endpoint == 'fontes' }}">Fontes</a>
     <a href="{{ url_for('captacao') }}" class="{{ 'ativo' if request.endpoint == 'captacao' }}">Captação</a>
-    <a href="{{ url_for('empresas') }}" class="{{ 'ativo' if request.endpoint in ('empresas', 'empresa_editar') }}">Empresas</a>
+    {% if plat and principal.perfil == 'Administrador' %}
+      <a href="{{ url_for('empresas') }}" class="{{ 'ativo' if request.endpoint in ('empresas', 'empresa_editar') }}">Empresas</a>
+    {% elif principal.perfil == 'Administrador' %}
+      <a href="{{ url_for('empresa_editar', empresa_id=principal.empresa_id) }}" class="{{ 'ativo' if request.endpoint == 'empresa_editar' }}">Minha Empresa</a>
+    {% endif %}
     <a href="{{ url_for('newsletter_nova') }}">Newsletter</a>
     <a href="{{ url_for('auditoria') }}">Auditoria</a>
-    {% if principal.perfil == 'Administrador' %}
+    {% if principal.perfil in ('Administrador', 'Editor') %}
       <a href="{{ url_for('provedores') }}" class="{{ 'ativo' if request.endpoint == 'provedores' }}">Provedores</a>
+    {% endif %}
+    {% if principal.perfil == 'Administrador' %}
       <a href="{{ url_for('usuarios') }}" class="{{ 'ativo' if request.endpoint == 'usuarios' }}">Usuários</a>
     {% endif %}
-    <a href="{{ url_for('settings') }}" class="{{ 'ativo' if request.endpoint == 'settings' }}">Configurações</a>
+    {% if plat and principal.perfil == 'Administrador' %}
+      <a href="{{ url_for('settings') }}" class="{{ 'ativo' if request.endpoint == 'settings' }}">Configurações</a>
+    {% endif %}
   </nav>
   <div class="userbox">
     <span class="user">{{ session['nome'] }}</span>
-    <span class="badge">{{ principal.perfil }}</span>
+    <span class="badge">{{ principal.perfil }}{% if plat %} · Plataforma{% endif %}</span>
     <a class="logout" href="{{ url_for('logout') }}">Sair</a>
   </div>
 </header>

@@ -121,29 +121,46 @@ class CaptacaoRepository:
     def __init__(self, db):
         self.db = db
 
-    def registrar(self, fonte, conteudo: str, *, provedor: str = None):
+    def registrar(self, fonte, conteudo: str, *, provedor: str = None,
+                  empresa_id=None):
         from datetime import datetime, timezone
 
         agora = datetime.now(timezone.utc).isoformat()
         self.db.insert(
             "INSERT INTO captacoes (fonte_id, fonte_nome, categoria, regiao, "
-            "provedor, conteudo, status, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            "provedor, empresa_id, conteudo, status, criado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (fonte.id, fonte.nome, getattr(fonte, "categoria", None),
-             getattr(fonte, "regiao", None), provedor, conteudo, "pendente", agora),
+             getattr(fonte, "regiao", None), provedor, empresa_id,
+             conteudo, "pendente", agora),
         )
         self.db.commit()
 
-    def listar_recentes(self, limite: int = 50, *, status: str = None) -> list[dict]:
+    def _filtro_empresa(self, empresa_id, somente_empresa):
+        """(clausula, params) para isolar por empresa. Plataforma vê tudo."""
+        if not somente_empresa:
+            return "", []
+        return "empresa_id = ?", [empresa_id]
+
+    def listar_recentes(self, limite: int = 50, *, status: str = None,
+                        empresa_id=None, somente_empresa: bool = False) -> list[dict]:
+        clausulas, params = [], []
         if status:
-            return self.db.query_all(
-                "SELECT * FROM captacoes WHERE status = ? "
-                "ORDER BY criado_em DESC, id DESC LIMIT ?",
-                (status, limite),
-            )
+            clausulas.append("status = ?")
+            params.append(status)
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        if cl:
+            clausulas.append(cl)
+            params += pa
+        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        params.append(limite)
         return self.db.query_all(
-            "SELECT * FROM captacoes ORDER BY criado_em DESC, id DESC LIMIT ?",
-            (limite,),
+            "SELECT * FROM captacoes" + where +
+            " ORDER BY criado_em DESC, id DESC LIMIT ?", params,
         )
+
+    def get(self, captacao_id: int) -> dict:
+        return self.db.query_one("SELECT * FROM captacoes WHERE id = ?", (captacao_id,))
 
     def definir_status(self, captacao_id: int, status: str) -> None:
         if status not in self.STATUS:
@@ -153,9 +170,13 @@ class CaptacaoRepository:
         )
         self.db.commit()
 
-    def contar_por_status(self) -> dict:
+    def contar_por_status(self, *, empresa_id=None,
+                          somente_empresa: bool = False) -> dict:
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        where = (" WHERE " + cl) if cl else ""
         linhas = self.db.query_all(
-            "SELECT status, COUNT(*) AS n FROM captacoes GROUP BY status"
+            "SELECT status, COUNT(*) AS n FROM captacoes" + where +
+            " GROUP BY status", pa,
         )
         base = {s: 0 for s in self.STATUS}
         for l in linhas:

@@ -230,6 +230,15 @@ class ProvedorRepository:
         )
         return [_row(r) for r in rows]
 
+    def listar_visiveis(self, empresa_id: Optional[int]) -> list[Provedor]:
+        """Globais (empresa_id nulo) + os da empresa informada."""
+        rows = self.db.query_all(
+            "SELECT * FROM provedores_ia WHERE empresa_id IS NULL OR empresa_id = ? "
+            "ORDER BY LOWER(nome) ASC",
+            (empresa_id,),
+        )
+        return [_row(r) for r in rows]
+
     def criar(self, nome: str, formato: str, base_url: str, modelo: str, *,
               api_key: Optional[str] = None, empresa_id: Optional[int] = None,
               ativo: bool = True) -> Provedor:

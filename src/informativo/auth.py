@@ -41,13 +41,23 @@ def normalizar_perfil(perfil: str) -> str:
 
 @dataclass
 class ContaUsuario:
-    """Registro de conta na tabela ``usuarios``."""
+    """Registro de conta na tabela ``usuarios``.
+
+    ``empresa_id`` vazio (None) identifica o **Administrador da Plataforma**
+    (acesso global). Preenchido, a conta pertence a uma empresa e só enxerga os
+    dados dela.
+    """
 
     id: int
     username: str
     perfil: str
     nome: Optional[str] = None
+    empresa_id: Optional[int] = None
     ativo: bool = True
+
+    @property
+    def e_plataforma(self) -> bool:
+        return self.empresa_id is None
 
 
 def _row_para_conta(row: dict[str, Any]) -> ContaUsuario:
@@ -56,6 +66,7 @@ def _row_para_conta(row: dict[str, Any]) -> ContaUsuario:
         username=row["username"],
         perfil=row["perfil"],
         nome=row.get("nome"),
+        empresa_id=row.get("empresa_id"),
         ativo=bool(row.get("ativo", 1)),
     )
 
@@ -90,10 +101,12 @@ class UsuarioRepository:
         perfil: str = "Editor",
         *,
         nome: Optional[str] = None,
+        empresa_id: Optional[int] = None,
         atualizar_se_existir: bool = False,
     ) -> ContaUsuario:
         """Cria (ou atualiza) uma conta. Levanta ``ValueError`` se já existir e
-        ``atualizar_se_existir`` for ``False``."""
+        ``atualizar_se_existir`` for ``False``. ``empresa_id`` vazio = conta da
+        plataforma (acesso global)."""
         username = username.strip().lower()
         if not username:
             raise ValueError("username é obrigatório")
@@ -106,19 +119,27 @@ class UsuarioRepository:
                 raise ValueError(f"Usuário já existe: {username!r}")
             self.db.execute(
                 "UPDATE usuarios SET senha_hash = ?, perfil = ?, nome = ?, "
-                "atualizado_em = ? WHERE username = ?",
-                (senha_h, perfil, nome, agora, username),
+                "empresa_id = ?, atualizado_em = ? WHERE username = ?",
+                (senha_h, perfil, nome, empresa_id, agora, username),
             )
         else:
             self.db.execute(
                 "INSERT INTO usuarios (username, nome, perfil, senha_hash, "
-                "ativo, criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (username, nome, perfil, senha_h, 1, agora, agora),
+                "empresa_id, ativo, criado_em, atualizado_em) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (username, nome, perfil, senha_h, empresa_id, 1, agora, agora),
             )
         self.db.commit()
         conta = self.get(username)
         assert conta is not None
         return conta
+
+    def definir_empresa(self, username: str, empresa_id: Optional[int]) -> None:
+        self.db.execute(
+            "UPDATE usuarios SET empresa_id = ?, atualizado_em = ? WHERE username = ?",
+            (empresa_id, self._agora(), username.strip().lower()),
+        )
+        self.db.commit()
 
     def autenticar(self, username: str, senha: str) -> Optional[ContaUsuario]:
         """Valida credenciais. Retorna a conta ativa ou ``None`` se inválido."""
@@ -132,11 +153,18 @@ class UsuarioRepository:
             return None
         return _row_para_conta(row)
 
-    def listar(self) -> list[ContaUsuario]:
-        return [
-            _row_para_conta(r)
-            for r in self.db.query_all("SELECT * FROM usuarios ORDER BY username")
-        ]
+    def listar(self, *, empresa_id: Optional[int] = None,
+               apenas_empresa: bool = False) -> list[ContaUsuario]:
+        """Lista contas. Com ``apenas_empresa=True`` retorna só as da
+        ``empresa_id`` informada (isolamento entre empresas)."""
+        if apenas_empresa:
+            rows = self.db.query_all(
+                "SELECT * FROM usuarios WHERE empresa_id = ? ORDER BY username",
+                (empresa_id,),
+            )
+        else:
+            rows = self.db.query_all("SELECT * FROM usuarios ORDER BY username")
+        return [_row_para_conta(r) for r in rows]
 
     def set_ativo(self, username: str, ativo: bool) -> None:
         """Ativa ou desativa uma conta (desativada não consegue logar)."""

@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
     nome          TEXT,
     perfil        TEXT    NOT NULL DEFAULT 'Editor',
     senha_hash    TEXT    NOT NULL,
+    empresa_id    INTEGER,
     ativo         INTEGER NOT NULL DEFAULT 1,
     criado_em     TEXT,
     atualizado_em TEXT
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS captacoes (
     categoria  TEXT,
     regiao     TEXT,
     provedor   TEXT,
+    empresa_id INTEGER,
     conteudo   TEXT,
     status     TEXT NOT NULL DEFAULT 'pendente',
     criado_em  TEXT
@@ -224,6 +226,10 @@ def init_db(db: Database) -> None:
     db.commit()
     # Migrações para bancos criados por versões anteriores (ex.: captacoes sem
     # as colunas de triagem). CREATE TABLE IF NOT EXISTS não altera colunas.
+    _garantir_coluna(db, "captacoes", "categoria", "TEXT")
+    _garantir_coluna(db, "captacoes", "regiao", "TEXT")
     _garantir_coluna(db, "captacoes", "provedor", "TEXT")
     _garantir_coluna(db, "captacoes", "status", "TEXT NOT NULL DEFAULT 'pendente'")
+    _garantir_coluna(db, "captacoes", "empresa_id", "INTEGER")
     _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")
+    _garantir_coluna(db, "usuarios", "empresa_id", "INTEGER")

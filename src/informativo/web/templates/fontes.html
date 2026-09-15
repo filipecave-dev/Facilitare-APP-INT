@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Fontes — Informativo{% endblock %}
-{% set pode_editar = principal.perfil in ('Administrador', 'Editor') %}
+{% set pode_editar = principal.empresa_id is none and principal.perfil == 'Administrador' %}
 {% block content %}
 <div class="page-head">
   <div>

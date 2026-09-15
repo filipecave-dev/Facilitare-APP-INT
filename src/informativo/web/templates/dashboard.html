@@ -4,16 +4,23 @@
 <div class="page-head">
   <div>
     <h1>Painel Principal</h1>
-    <p class="muted">Visão geral das fontes de informação monitoradas.</p>
+    <p class="muted">
+      {% if empresa %}Empresa: <strong>{{ empresa.nome }}</strong> — solução “{{ empresa.nome_solucao }}”.
+      {% else %}Visão geral (plataforma).{% endif %}
+    </p>
   </div>
-  <a class="btn btn-primary" href="{{ url_for('fontes') }}">Gerenciar fontes</a>
+  <a class="btn btn-primary" href="{{ url_for('captacao') }}">Ir para Captação</a>
 </div>
 
 <div class="cards">
-  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Fontes cadastradas</span></div>
-  <div class="card stat"><span class="num">{{ resumo.ativas }}</span><span class="lbl">Fontes ativas</span></div>
-  <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
+  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Fontes no catálogo</span></div>
+  <div class="card stat"><span class="num">{{ captacao.pendente }}</span><span class="lbl">Captações aguardando</span></div>
+  <div class="card stat"><span class="num">{{ captacao.aprovada }}</span><span class="lbl">Aprovadas (podem usar)</span></div>
+  {% if is_plataforma %}
   <div class="card stat"><span class="num">{{ total_empresas }}</span><span class="lbl">Empresas (clientes)</span></div>
+  {% else %}
+  <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
+  {% endif %}
 </div>
 
 <div class="card">

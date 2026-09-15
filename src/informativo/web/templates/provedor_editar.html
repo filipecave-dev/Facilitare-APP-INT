@@ -30,12 +30,14 @@
       <label>Chave de API
         <input type="password" name="api_key" placeholder="•••••••• (em branco = manter a atual)" autocomplete="off">
       </label>
+      {% if is_plataforma %}
       <label>Empresa (cliente)
         <select name="empresa_id">
           <option value="">Global (do sistema)</option>
           {% for e in empresas %}<option value="{{ e.id }}" {{ 'selected' if e.id == p.empresa_id }}>{{ e.nome }}</option>{% endfor %}
         </select>
       </label>
+      {% endif %}
       <label class="check">
         <input type="checkbox" name="ativo" value="1" {{ 'checked' if p.ativo }}> Ativo
       </label>

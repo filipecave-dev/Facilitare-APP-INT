@@ -40,13 +40,16 @@
       <label>Chave de API
         <input type="password" name="api_key" placeholder="••••••••" autocomplete="off">
       </label>
+      {% if is_plataforma %}
       <label>Empresa (cliente)
         <select name="empresa_id">
           <option value="">Global (do sistema)</option>
           {% for e in empresas %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
         </select>
       </label>
+      {% endif %}
     </div>
+    {% if not is_plataforma %}<p class="help">Esta conexão será criada para a sua empresa (com a sua própria chave).</p>{% endif %}
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">Adicionar</button>
     </div>
@@ -71,13 +74,16 @@
           <td><strong>{{ p.nome }}</strong><br><span class="muted" style="font-size:12px">{{ p.base_url }}</span></td>
           <td>{{ 'Claude' if p.formato == 'anthropic' else 'OpenAI' }}</td>
           <td>{{ p.modelo }}</td>
-          <td>{% if p.empresa_id %}{% for e in empresas %}{% if e.id == p.empresa_id %}{{ e.nome }}{% endif %}{% endfor %}{% else %}<span class="muted">Global</span>{% endif %}</td>
+          {% set global = p.empresa_id is none %}
+          {% set pode_gerir = is_plataforma or (p.empresa_id == minha_empresa and not global) %}
+          <td>{% if p.empresa_id %}{% for e in empresas %}{% if e.id == p.empresa_id %}{{ e.nome }}{% endif %}{% endfor %}{% if not empresas %}Empresa{% endif %}{% else %}<span class="muted">Global</span>{% endif %}</td>
           <td>{% if p.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
           <td>
-            <a class="btn btn-sm" href="{{ url_for('provedores_editar', pid=p.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('provedores_testar', pid=p.id) }}">
               <button type="submit" class="btn btn-sm">Testar</button>
             </form>
+            {% if pode_gerir %}
+            <a class="btn btn-sm" href="{{ url_for('provedores_editar', pid=p.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('provedores_alternar', pid=p.id) }}">
               <button type="submit" class="btn btn-sm">{{ 'Desativar' if p.ativo else 'Ativar' }}</button>
             </form>
@@ -85,6 +91,7 @@
                   onsubmit="return confirm('Remover a conexão {{ p.nome }}?');">
               <button type="submit" class="btn btn-sm btn-danger">Remover</button>
             </form>
+            {% elif global %}<span class="muted" style="font-size:12px">Global (somente leitura)</span>{% endif %}
           </td>
         </tr>
         {% endfor %}

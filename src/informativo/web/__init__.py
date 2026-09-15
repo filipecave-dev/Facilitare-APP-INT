@@ -152,6 +152,25 @@ def perfil_obrigatorio(*perfis: str):
     return deco
 
 
+def _is_plataforma(principal) -> bool:
+    """True se a conta é da plataforma (acesso global, sem empresa)."""
+    return principal is not None and principal.empresa_id is None
+
+
+def plataforma_obrigatoria(fn):
+    """Restringe a ação ao Administrador da Plataforma (recursos globais)."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        principal = _principal()
+        if principal is None:
+            return redirect(url_for("login"))
+        if principal.empresa_id is not None or principal.perfil != "Administrador":
+            abort(403)
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
 # ---------------------------------------------------------------------------
 # Registro de rotas
 # ---------------------------------------------------------------------------
@@ -246,15 +265,27 @@ def _registrar(app: Flask) -> None:
     @app.route("/dashboard")
     @login_obrigatorio
     def dashboard():
+        from ..omniroute import CaptacaoRepository
+
+        principal = _principal()
         repo = FonteRepository(_db())
         resumo = repo.resumo()
         recentes = repo.listar()[:8]
-        total_empresas = EmpresaRepository(_db()).count()
+        somente = not _is_plataforma(principal)
+        cap = CaptacaoRepository(_db()).contar_por_status(
+            empresa_id=principal.empresa_id, somente_empresa=somente
+        )
+        empresa = None
+        if principal.empresa_id is not None:
+            empresa = EmpresaRepository(_db()).get(principal.empresa_id)
         return render_template(
             "dashboard.html",
             resumo=resumo,
             recentes=recentes,
-            total_empresas=total_empresas,
+            total_empresas=EmpresaRepository(_db()).count(),
+            is_plataforma=_is_plataforma(principal),
+            captacao=cap,
+            empresa=empresa,
         )
 
     # -- Gerenciar fontes ---------------------------------------------------
@@ -287,7 +318,7 @@ def _registrar(app: Flask) -> None:
         )
 
     @app.route("/fontes/adicionar", methods=["POST"])
-    @perfil_obrigatorio("Administrador", "Editor")
+    @plataforma_obrigatoria
     def fontes_adicionar():
         repo = FonteRepository(_db())
         try:
@@ -307,7 +338,7 @@ def _registrar(app: Flask) -> None:
         return redirect(url_for("fontes"))
 
     @app.route("/fontes/<int:fonte_id>/editar", methods=["GET", "POST"])
-    @perfil_obrigatorio("Administrador", "Editor")
+    @plataforma_obrigatoria
     def fontes_editar(fonte_id: int):
         repo = FonteRepository(_db())
         fonte = repo.get(fonte_id)
@@ -338,13 +369,13 @@ def _registrar(app: Flask) -> None:
         )
 
     @app.route("/fontes/<int:fonte_id>/alternar", methods=["POST"])
-    @perfil_obrigatorio("Administrador", "Editor")
+    @plataforma_obrigatoria
     def fontes_alternar(fonte_id: int):
         FonteRepository(_db()).alternar_ativa(fonte_id)
         return redirect(request.referrer or url_for("fontes"))
 
     @app.route("/fontes/<int:fonte_id>/remover", methods=["POST"])
-    @perfil_obrigatorio("Administrador", "Editor")
+    @plataforma_obrigatoria
     def fontes_remover(fonte_id: int):
         repo = FonteRepository(_db())
         fonte = repo.get(fonte_id)
@@ -355,7 +386,7 @@ def _registrar(app: Flask) -> None:
         return redirect(url_for("fontes"))
 
     @app.route("/fontes/importar", methods=["POST"])
-    @perfil_obrigatorio("Administrador", "Editor")
+    @plataforma_obrigatoria
     def fontes_importar():
         from ..fontes import carregar_seed
 
@@ -369,9 +400,9 @@ def _registrar(app: Flask) -> None:
         )
         return redirect(url_for("fontes"))
 
-    # -- Configurações (tema + e-mail) --------------------------------------
+    # -- Configurações (tema + e-mail) — globais da plataforma --------------
     @app.route("/settings", methods=["GET", "POST"])
-    @login_obrigatorio
+    @plataforma_obrigatoria
     def settings():
         repo = SettingsRepository(_db())
         if request.method == "POST":
@@ -388,25 +419,45 @@ def _registrar(app: Flask) -> None:
         )
 
     # -- Provedores de IA (conexões: OmniRoute/GPT/DeepSeek/Gemini/Claude) --
+    def _pode_gerir_provedor(principal, p) -> bool:
+        """Plataforma gere tudo; empresa só os seus (nunca globais/de outra)."""
+        if _is_plataforma(principal):
+            return True
+        return p is not None and p.empresa_id == principal.empresa_id
+
     @app.route("/provedores")
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores():
         from ..provedores import ProvedorRepository
 
+        principal = _principal()
+        repo = ProvedorRepository(_db())
+        if _is_plataforma(principal):
+            lista = repo.listar()
+            empresas = EmpresaRepository(_db()).listar()
+        else:
+            lista = repo.listar_visiveis(principal.empresa_id)
+            empresas = []
         return render_template(
             "provedores.html",
-            provedores=ProvedorRepository(_db()).listar(),
-            empresas=EmpresaRepository(_db()).listar(),
+            provedores=lista,
+            empresas=empresas,
+            is_plataforma=_is_plataforma(principal),
+            minha_empresa=principal.empresa_id,
         )
 
     @app.route("/provedores/criar", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores_criar():
         from ..provedores import ProvedorRepository
 
+        principal = _principal()
+        if _is_plataforma(principal):
+            emp = request.form.get("empresa_id") or None
+            empresa_id = int(emp) if emp else None  # plataforma pode global
+        else:
+            empresa_id = principal.empresa_id  # empresa: sempre a própria
         try:
-            empresa_id = request.form.get("empresa_id") or None
-            empresa_id = int(empresa_id) if empresa_id else None
             p = ProvedorRepository(_db()).criar(
                 request.form.get("nome", ""),
                 request.form.get("formato", "openai"),
@@ -422,25 +473,29 @@ def _registrar(app: Flask) -> None:
         return redirect(url_for("provedores"))
 
     @app.route("/provedores/<int:pid>/editar", methods=["GET", "POST"])
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores_editar(pid: int):
         from ..provedores import ProvedorRepository
 
+        principal = _principal()
         repo = ProvedorRepository(_db())
         p = repo.get(pid)
         if p is None:
             abort(404)
+        if not _pode_gerir_provedor(principal, p):
+            abort(403)
         if request.method == "POST":
-            emp = request.form.get("empresa_id") or None
             campos = {
                 "nome": request.form.get("nome", p.nome),
                 "formato": request.form.get("formato", p.formato),
                 "base_url": request.form.get("base_url", p.base_url),
                 "modelo": request.form.get("modelo", p.modelo),
-                "empresa_id": int(emp) if emp else None,
                 "ativo": request.form.get("ativo", "1") == "1",
             }
-            # Chave só é trocada se o campo vier preenchido.
+            # Só a plataforma reatribui empresa; empresa mantém a própria.
+            if _is_plataforma(principal):
+                emp = request.form.get("empresa_id") or None
+                campos["empresa_id"] = int(emp) if emp else None
             nova_chave = (request.form.get("api_key") or "").strip()
             if nova_chave:
                 campos["api_key"] = nova_chave
@@ -453,34 +508,52 @@ def _registrar(app: Flask) -> None:
         return render_template(
             "provedor_editar.html",
             p=repo.get(pid),
-            empresas=EmpresaRepository(_db()).listar(),
+            empresas=EmpresaRepository(_db()).listar() if _is_plataforma(principal) else [],
+            is_plataforma=_is_plataforma(principal),
         )
 
     @app.route("/provedores/<int:pid>/alternar", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores_alternar(pid: int):
         from ..provedores import ProvedorRepository
 
-        ProvedorRepository(_db()).alternar_ativo(pid)
+        repo = ProvedorRepository(_db())
+        p = repo.get(pid)
+        if p is None:
+            abort(404)
+        if not _pode_gerir_provedor(_principal(), p):
+            abort(403)
+        repo.alternar_ativo(pid)
         return redirect(url_for("provedores"))
 
     @app.route("/provedores/<int:pid>/remover", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores_remover(pid: int):
         from ..provedores import ProvedorRepository
 
-        ProvedorRepository(_db()).remover(pid)
+        repo = ProvedorRepository(_db())
+        p = repo.get(pid)
+        if p is None:
+            abort(404)
+        if not _pode_gerir_provedor(_principal(), p):
+            abort(403)
+        repo.remover(pid)
         flash("Provedor removido.", "ok")
         return redirect(url_for("provedores"))
 
     @app.route("/provedores/<int:pid>/testar", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @perfil_obrigatorio("Administrador", "Editor")
     def provedores_testar(pid: int):
         from ..provedores import IAError, ProvedorRepository
 
+        principal = _principal()
         p = ProvedorRepository(_db()).get(pid)
         if p is None:
             abort(404)
+        # Pode testar os que enxerga (globais ou da própria empresa).
+        if not (_is_plataforma(principal) or p.empresa_id is None
+                or p.empresa_id == principal.empresa_id):
+            abort(403)
         try:
             resposta = p.cliente(timeout=30).chat("Responda apenas: OK", max_tokens=10)
             flash(f"'{p.nome}' respondeu: {resposta[:120]}", "ok")
@@ -495,15 +568,25 @@ def _registrar(app: Flask) -> None:
         from ..omniroute import CaptacaoRepository
         from ..provedores import ProvedorRepository
 
+        principal = _principal()
         status = request.args.get("status") or "pendente"
         repo_cap = CaptacaoRepository(_db())
         repo_fontes = FonteRepository(_db())
+        somente = not _is_plataforma(principal)  # empresa só vê as suas
+        emp = principal.empresa_id
+        # Provedores utilizáveis: ativos globais + os da empresa.
+        prov_repo = ProvedorRepository(_db())
+        if _is_plataforma(principal):
+            provedores = prov_repo.listar(apenas_ativos=True)
+        else:
+            provedores = [p for p in prov_repo.listar_visiveis(emp) if p.ativo]
         return render_template(
             "captacao.html",
-            captacoes=repo_cap.listar_recentes(80, status=status),
-            contagem=repo_cap.contar_por_status(),
+            captacoes=repo_cap.listar_recentes(80, status=status,
+                                               empresa_id=emp, somente_empresa=somente),
+            contagem=repo_cap.contar_por_status(empresa_id=emp, somente_empresa=somente),
             status_atual=status,
-            provedores=ProvedorRepository(_db()).listar(apenas_ativos=True),
+            provedores=provedores,
             empresas=EmpresaRepository(_db()).listar(),
             regioes=repo_fontes.regioes(),
             total_ativas=repo_fontes.resumo()["ativas"],
@@ -521,6 +604,7 @@ def _registrar(app: Flask) -> None:
             quantidade = 5
         quantidade = max(1, min(15, quantidade))
 
+        principal = _principal()
         provedor = None
         pid = request.form.get("provedor_id")
         if pid:
@@ -528,6 +612,10 @@ def _registrar(app: Flask) -> None:
         if provedor is None or not provedor.ativo:
             flash("Selecione um provedor de IA ativo (cadastre em Provedores).", "erro")
             return redirect(url_for("captacao"))
+        # Empresa só usa provedores globais ou os da própria empresa.
+        if not (_is_plataforma(principal) or provedor.empresa_id is None
+                or provedor.empresa_id == principal.empresa_id):
+            abort(403)
 
         cli = provedor.cliente()
         repo_fontes = FonteRepository(_db())
@@ -559,7 +647,8 @@ def _registrar(app: Flask) -> None:
             system, prompt = prompt_para_fonte(fonte, conteudo)
             try:
                 texto = cli.chat(prompt, system=system)
-                repo_cap.registrar(fonte, texto, provedor=provedor.nome)
+                repo_cap.registrar(fonte, texto, provedor=provedor.nome,
+                                   empresa_id=principal.empresa_id)
                 ok += 1
             except IAError as exc:
                 falhas += 1
@@ -582,18 +671,26 @@ def _registrar(app: Flask) -> None:
         mapa = {"aprovar": "aprovada", "descartar": "descartada", "pendente": "pendente"}
         if acao not in mapa:
             abort(404)
-        CaptacaoRepository(_db()).definir_status(cid, mapa[acao])
+        repo = CaptacaoRepository(_db())
+        cap = repo.get(cid)
+        if cap is None:
+            abort(404)
+        principal = _principal()
+        # Empresa só faz triagem das próprias captações.
+        if not _is_plataforma(principal) and cap.get("empresa_id") != principal.empresa_id:
+            abort(403)
+        repo.definir_status(cid, mapa[acao])
         return redirect(request.referrer or url_for("captacao"))
 
-    # -- Empresas (clientes) ------------------------------------------------
+    # -- Empresas (clientes) — gestão global (plataforma) -------------------
     @app.route("/empresas")
-    @login_obrigatorio
+    @plataforma_obrigatoria
     def empresas():
         repo = EmpresaRepository(_db())
         return render_template("empresas.html", empresas=repo.listar())
 
     @app.route("/empresas/adicionar", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @plataforma_obrigatoria
     def empresas_adicionar():
         repo = EmpresaRepository(_db())
         try:
@@ -611,16 +708,17 @@ def _registrar(app: Flask) -> None:
         return redirect(url_for("empresas"))
 
     @app.route("/empresas/<int:empresa_id>", methods=["GET", "POST"])
-    @login_obrigatorio
+    @perfil_obrigatorio("Administrador")
     def empresa_editar(empresa_id: int):
         repo = EmpresaRepository(_db())
         empresa = repo.get(empresa_id)
         if empresa is None:
             abort(404)
+        principal = _principal()
+        # Plataforma edita qualquer empresa; Admin de empresa só a própria.
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
         if request.method == "POST":
-            principal = _principal()
-            if principal is None or principal.perfil != "Administrador":
-                abort(403)
             try:
                 repo.atualizar(
                     empresa_id,
@@ -634,21 +732,23 @@ def _registrar(app: Flask) -> None:
                     ativa=request.form.get("ativa", "1") == "1",
                 )
                 flash("Empresa atualizada.", "ok")
-                return redirect(url_for("empresas"))
+                destino = "empresas" if _is_plataforma(principal) else "dashboard"
+                return redirect(url_for(destino))
             except ValueError as exc:
                 flash(str(exc), "erro")
         return render_template(
-            "empresa_editar.html", empresa=empresa, presets=PRESETS
+            "empresa_editar.html", empresa=empresa, presets=PRESETS,
+            is_plataforma=_is_plataforma(principal),
         )
 
     @app.route("/empresas/<int:empresa_id>/alternar", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @plataforma_obrigatoria
     def empresas_alternar(empresa_id: int):
         EmpresaRepository(_db()).alternar_ativa(empresa_id)
         return redirect(request.referrer or url_for("empresas"))
 
     @app.route("/empresas/<int:empresa_id>/remover", methods=["POST"])
-    @perfil_obrigatorio("Administrador")
+    @plataforma_obrigatoria
     def empresas_remover(empresa_id: int):
         repo = EmpresaRepository(_db())
         empresa = repo.get(empresa_id)
@@ -658,26 +758,48 @@ def _registrar(app: Flask) -> None:
         flash(f"Empresa '{empresa.nome}' removida.", "ok")
         return redirect(url_for("empresas"))
 
-    # -- Usuários (gestão de acesso pelo administrador) ---------------------
+    # -- Usuários (gestão de acesso) — plataforma vê todos; Admin de empresa
+    #    vê e gere só os da própria empresa.
+    def _pode_gerir_usuario(principal, conta) -> bool:
+        if _is_plataforma(principal):
+            return True
+        return conta is not None and conta.empresa_id == principal.empresa_id
+
     @app.route("/usuarios")
     @perfil_obrigatorio("Administrador")
     def usuarios():
-        contas = UsuarioRepository(_db()).listar()
-        return render_template("usuarios.html", contas=contas)
+        principal = _principal()
+        repo = UsuarioRepository(_db())
+        if _is_plataforma(principal):
+            contas = repo.listar()
+            empresas = EmpresaRepository(_db()).listar()
+        else:
+            contas = repo.listar(empresa_id=principal.empresa_id, apenas_empresa=True)
+            empresas = []
+        return render_template(
+            "usuarios.html", contas=contas, empresas=empresas,
+            is_plataforma=_is_plataforma(principal),
+        )
 
     @app.route("/usuarios/criar", methods=["POST"])
     @perfil_obrigatorio("Administrador")
     def usuarios_criar():
+        principal = _principal()
         repo = UsuarioRepository(_db())
         username = request.form.get("username", "")
         senha = request.form.get("senha", "")
         nome = request.form.get("nome") or None
         perfil = request.form.get("perfil", "Editor")
+        if _is_plataforma(principal):
+            emp = request.form.get("empresa_id") or None
+            empresa_id = int(emp) if emp else None  # plataforma pode criar global
+        else:
+            empresa_id = principal.empresa_id  # Admin de empresa: sempre a própria
         if len(senha) < 8:
             flash("A senha deve ter ao menos 8 caracteres.", "erro")
             return redirect(url_for("usuarios"))
         try:
-            conta = repo.criar(username, senha, perfil, nome=nome)
+            conta = repo.criar(username, senha, perfil, nome=nome, empresa_id=empresa_id)
             flash(f"Usuário '{conta.username}' criado (perfil {conta.perfil}).", "ok")
         except ValueError as exc:
             flash(str(exc), "erro")
@@ -695,6 +817,8 @@ def _registrar(app: Flask) -> None:
         conta = repo.get(username)
         if conta is None:
             abort(404)
+        if not _pode_gerir_usuario(principal, conta):
+            abort(403)
         repo.set_ativo(username, not conta.ativo)
         flash(
             f"Usuário '{username}' {'ativado' if not conta.ativo else 'desativado'}.",
@@ -708,8 +832,11 @@ def _registrar(app: Flask) -> None:
         repo = UsuarioRepository(_db())
         username = (request.form.get("username") or "").strip().lower()
         nova = request.form.get("senha", "")
-        if repo.get(username) is None:
+        conta = repo.get(username)
+        if conta is None:
             abort(404)
+        if not _pode_gerir_usuario(_principal(), conta):
+            abort(403)
         if len(nova) < 8:
             flash("A nova senha deve ter ao menos 8 caracteres.", "erro")
             return redirect(url_for("usuarios"))
@@ -726,6 +853,8 @@ def _registrar(app: Flask) -> None:
         if conta is None:
             abort(404)
         principal = _principal()
+        if not _pode_gerir_usuario(principal, conta):
+            abort(403)
         if principal and alvo == principal.username:
             flash("Você já está no seu próprio acesso.", "aviso")
             return redirect(url_for("usuarios"))
@@ -757,8 +886,11 @@ def _registrar(app: Flask) -> None:
         repo = UsuarioRepository(_db())
         username = (request.form.get("username") or "").strip().lower()
         perfil = request.form.get("perfil", "Editor")
-        if repo.get(username) is None:
+        conta = repo.get(username)
+        if conta is None:
             abort(404)
+        if not _pode_gerir_usuario(_principal(), conta):
+            abort(403)
         try:
             repo.definir_perfil(username, perfil)
             flash(f"Perfil de '{username}' atualizado para {perfil}.", "ok")

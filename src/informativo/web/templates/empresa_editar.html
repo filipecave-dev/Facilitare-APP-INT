@@ -8,7 +8,7 @@
     <p class="muted">Personalize o nome da solução, o assunto do e-mail e a
        identidade desta empresa.</p>
   </div>
-  <a class="btn" href="{{ url_for('empresas') }}">Voltar</a>
+  <a class="btn" href="{{ url_for('empresas') if is_plataforma else url_for('dashboard') }}">Voltar</a>
 </div>
 
 <div class="card">
