@@ -42,9 +42,22 @@ CREATE TABLE IF NOT EXISTS fontes (
     idioma        TEXT,
     relevancia    INTEGER NOT NULL DEFAULT 3,
     prioridade    INTEGER NOT NULL DEFAULT 3,
+    empresa_id    INTEGER,
     ativa         INTEGER NOT NULL DEFAULT 1,
     criado_em     TEXT,
     atualizado_em TEXT
+);
+
+CREATE TABLE IF NOT EXISTS fontes_candidatas (
+    id         {pk},
+    fonte_id   INTEGER,
+    empresa_id INTEGER,
+    nome       TEXT,
+    url        TEXT,
+    categoria  TEXT,
+    regiao     TEXT,
+    status     TEXT NOT NULL DEFAULT 'pendente',
+    criado_em  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS empresas (
@@ -233,3 +246,4 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "captacoes", "empresa_id", "INTEGER")
     _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")
     _garantir_coluna(db, "usuarios", "empresa_id", "INTEGER")
+    _garantir_coluna(db, "fontes", "empresa_id", "INTEGER")

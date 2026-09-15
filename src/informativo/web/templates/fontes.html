@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Fontes — Informativo{% endblock %}
-{% set pode_editar = principal.empresa_id is none and principal.perfil == 'Administrador' %}
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Gerenciar Fontes</h1>
-    <p class="muted">Provedores de onde o Informativo captura informações a buscar.</p>
+    <p class="muted">Provedores de onde o Informativo captura informações.
+      {% if is_plataforma %}Você gerencia o catálogo <strong>global</strong> e vê as privadas das empresas.
+      {% else %}Você vê o catálogo <strong>global</strong> (leitura) e cadastra as <strong>suas fontes privadas</strong>.{% endif %}</p>
   </div>
-  {% if pode_editar %}
+  {% if is_plataforma %}
   <form class="inline-form" method="post" action="{{ url_for('fontes_importar') }}"
         onsubmit="return confirm('Importar as fontes de referência (planilha)? URLs já cadastradas serão ignoradas.');">
     <button type="submit" class="btn">Importar fontes de referência</button>
@@ -16,15 +17,20 @@
 </div>
 
 <div class="cards">
-  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Total</span></div>
+  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Total no catálogo</span></div>
   <div class="card stat"><span class="num">{{ resumo.ativas }}</span><span class="lbl">Ativas</span></div>
-  <div class="card stat"><span class="num">{{ resumo.inativas }}</span><span class="lbl">Inativas</span></div>
   <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
+  <div class="card stat"><span class="num">{{ fontes|length }}</span><span class="lbl">Visíveis para você</span></div>
 </div>
 
-{% if pode_editar %}
+{% if pode_gerir %}
 <div class="card">
-  <h2>Adicionar fonte</h2>
+  <h2>Adicionar {{ 'fonte global' if is_plataforma else 'fonte privada' }}</h2>
+  {% if not is_plataforma %}
+  <p class="help">Fontes privadas ficam visíveis só para a sua empresa e são
+     enviadas para <strong>curadoria</strong> — a plataforma avalia se vale
+     incluí-las no catálogo global.</p>
+  {% endif %}
   <form method="post" action="{{ url_for('fontes_adicionar') }}">
     <div class="grid">
       <label>Fonte
@@ -101,23 +107,26 @@
     <table>
       <thead>
         <tr>
-          <th>Fonte</th><th>Categoria</th><th>País/Região</th>
-          <th>Relevância</th><th>Prioridade</th><th>Situação</th><th>Inclusão</th>
-          {% if pode_editar %}<th>Ações</th>{% endif %}
+          <th>Fonte</th><th>Escopo</th><th>Categoria</th><th>País/Região</th>
+          <th>Relevância</th><th>Prioridade</th><th>Situação</th>
+          {% if pode_gerir %}<th>Ações</th>{% endif %}
         </tr>
       </thead>
       <tbody>
         {% for f in fontes %}
+        {% set minha = f.empresa_id is not none and f.empresa_id == minha_empresa %}
+        {% set pode_f = is_plataforma or minha %}
         <tr>
           <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a></td>
+          <td>{% if f.empresa_id is none %}<span class="pill">Global</span>{% elif minha %}<span class="pill on">Privada</span>{% else %}<span class="pill off">Empresa</span>{% endif %}</td>
           <td>{{ f.categoria or '—' }}</td>
           <td>{{ f.regiao or '—' }}</td>
           <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.relevancia else 'off' }}">★</span>{% endfor %}</span></td>
           <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.prioridade else 'off' }}">★</span>{% endfor %}</span></td>
           <td>{% if f.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
-          <td class="muted">{{ (f.criado_em or '')[:10] or '—' }}</td>
-          {% if pode_editar %}
+          {% if pode_gerir %}
           <td>
+            {% if pode_f %}
             <a class="btn btn-sm" href="{{ url_for('fontes_editar', fonte_id=f.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('fontes_alternar', fonte_id=f.id) }}">
               <button type="submit" class="btn btn-sm">{{ 'Desativar' if f.ativa else 'Ativar' }}</button>
@@ -126,6 +135,7 @@
                   onsubmit="return confirm('Remover a fonte {{ f.nome }}?');">
               <button type="submit" class="btn btn-sm btn-danger">Remover</button>
             </form>
+            {% else %}<span class="muted" style="font-size:12px">Global (leitura)</span>{% endif %}
           </td>
           {% endif %}
         </tr>

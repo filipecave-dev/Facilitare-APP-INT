@@ -95,6 +95,48 @@ def test_editor_nao_edita_fontes(app):
     assert c.get("/fontes").status_code == 200  # mas vê (leitura)
 
 
+def test_fonte_privada_isolada_e_curadoria(app):
+    from informativo.fontes import CandidataRepository, FonteRepository
+    with Database(app.config["DSN"]) as db:
+        a = EmpresaRepository(db).criar("Empresa A")
+        b = EmpresaRepository(db).criar("Empresa B")
+        UsuarioRepository(db).criar("eda", "senha12345", "Editor", empresa_id=a.id)
+        UsuarioRepository(db).criar("edb", "senha12345", "Editor", empresa_id=b.id)
+        aid = a.id
+
+    # Editor da A cria uma fonte privada
+    ca = _login(app, "eda", "senha12345")
+    ca.post("/fontes/adicionar", data={
+        "nome": "Fonte Secreta A", "url": "https://secreta-a.com",
+        "categoria": "Geral", "regiao": "Brasil", "relevancia": "3", "prioridade": "3",
+    }, follow_redirects=True)
+
+    with Database(app.config["DSN"]) as db:
+        fr = FonteRepository(db)
+        secretas = [f for f in fr.listar() if f.nome == "Fonte Secreta A"]
+        assert secretas and secretas[0].empresa_id == aid  # privada da A
+        # virou candidata na curadoria
+        assert CandidataRepository(db).contar_pendentes() == 1
+
+    # Editor da B NÃO vê a fonte privada da A
+    cb = _login(app, "edb", "senha12345")
+    resp = cb.get("/fontes")
+    assert b"Fonte Secreta A" not in resp.data
+
+    # Plataforma vê na curadoria e promove ao global
+    cadmin = _login(app, "admin", "senhaforte")
+    resp = cadmin.get("/curadoria?status=pendente")
+    assert b"Fonte Secreta A" in resp.data
+    with Database(app.config["DSN"]) as db:
+        cid = CandidataRepository(db).listar(status="pendente")[0]["id"]
+    cadmin.post(f"/curadoria/{cid}/promover", follow_redirects=True)
+    with Database(app.config["DSN"]) as db:
+        f = [f for f in FonteRepository(db).listar() if f.nome == "Fonte Secreta A"][0]
+        assert f.empresa_id is None  # agora é global
+    # Agora a empresa B vê (é global)
+    assert b"Fonte Secreta A" in cb.get("/fontes").data
+
+
 def test_config_e_empresas_sao_da_plataforma(app):
     with Database(app.config["DSN"]) as db:
         a = EmpresaRepository(db).criar("Empresa A")

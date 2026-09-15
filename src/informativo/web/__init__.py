@@ -288,20 +288,26 @@ def _registrar(app: Flask) -> None:
             empresa=empresa,
         )
 
-    # -- Gerenciar fontes ---------------------------------------------------
+    # -- Gerenciar fontes (globais + privadas por empresa) ------------------
+    def _pode_gerir_fonte(principal, fonte) -> bool:
+        """Plataforma gere qualquer fonte; empresa só as suas privadas."""
+        if _is_plataforma(principal):
+            return True
+        return fonte is not None and fonte.empresa_id == principal.empresa_id
+
     @app.route("/fontes")
     @login_obrigatorio
     def fontes():
+        principal = _principal()
         repo = FonteRepository(_db())
         busca = request.args.get("busca") or None
         categoria = request.args.get("categoria") or None
         regiao = request.args.get("regiao") or None
         apenas_ativas = request.args.get("ativas") == "1"
+        escopo = None if _is_plataforma(principal) else ("visiveis", principal.empresa_id)
         lista = repo.listar(
-            busca=busca,
-            categoria=categoria,
-            regiao=regiao,
-            apenas_ativas=apenas_ativas,
+            busca=busca, categoria=categoria, regiao=regiao,
+            apenas_ativas=apenas_ativas, escopo=escopo,
         )
         return render_template(
             "fontes.html",
@@ -315,12 +321,20 @@ def _registrar(app: Flask) -> None:
                 "ativas": apenas_ativas,
             },
             resumo=repo.resumo(),
+            is_plataforma=_is_plataforma(principal),
+            minha_empresa=principal.empresa_id,
+            pode_gerir=principal.perfil in ("Administrador", "Editor"),
         )
 
     @app.route("/fontes/adicionar", methods=["POST"])
-    @plataforma_obrigatoria
+    @perfil_obrigatorio("Administrador", "Editor")
     def fontes_adicionar():
+        from ..fontes import CandidataRepository
+
+        principal = _principal()
         repo = FonteRepository(_db())
+        # Plataforma cria global; empresa cria PRIVADA (e vira candidata).
+        empresa_id = None if _is_plataforma(principal) else principal.empresa_id
         try:
             fonte = repo.criar(
                 request.form.get("nome", ""),
@@ -330,20 +344,27 @@ def _registrar(app: Flask) -> None:
                 idioma=request.form.get("idioma") or None,
                 relevancia=int(request.form.get("relevancia", 3) or 3),
                 prioridade=int(request.form.get("prioridade", 3) or 3),
+                empresa_id=empresa_id,
                 ativa=request.form.get("ativa", "1") == "1",
             )
-            flash(f"Fonte '{fonte.nome}' adicionada.", "ok")
+            if empresa_id is not None:
+                CandidataRepository(_db()).registrar(fonte)
+                flash(f"Fonte privada '{fonte.nome}' adicionada (enviada para curadoria).", "ok")
+            else:
+                flash(f"Fonte global '{fonte.nome}' adicionada.", "ok")
         except ValueError as exc:
             flash(str(exc), "erro")
         return redirect(url_for("fontes"))
 
     @app.route("/fontes/<int:fonte_id>/editar", methods=["GET", "POST"])
-    @plataforma_obrigatoria
+    @perfil_obrigatorio("Administrador", "Editor")
     def fontes_editar(fonte_id: int):
         repo = FonteRepository(_db())
         fonte = repo.get(fonte_id)
         if fonte is None:
             abort(404)
+        if not _pode_gerir_fonte(_principal(), fonte):
+            abort(403)
         if request.method == "POST":
             try:
                 repo.atualizar(
@@ -369,18 +390,26 @@ def _registrar(app: Flask) -> None:
         )
 
     @app.route("/fontes/<int:fonte_id>/alternar", methods=["POST"])
-    @plataforma_obrigatoria
+    @perfil_obrigatorio("Administrador", "Editor")
     def fontes_alternar(fonte_id: int):
-        FonteRepository(_db()).alternar_ativa(fonte_id)
+        repo = FonteRepository(_db())
+        fonte = repo.get(fonte_id)
+        if fonte is None:
+            abort(404)
+        if not _pode_gerir_fonte(_principal(), fonte):
+            abort(403)
+        repo.alternar_ativa(fonte_id)
         return redirect(request.referrer or url_for("fontes"))
 
     @app.route("/fontes/<int:fonte_id>/remover", methods=["POST"])
-    @plataforma_obrigatoria
+    @perfil_obrigatorio("Administrador", "Editor")
     def fontes_remover(fonte_id: int):
         repo = FonteRepository(_db())
         fonte = repo.get(fonte_id)
         if fonte is None:
             abort(404)
+        if not _pode_gerir_fonte(_principal(), fonte):
+            abort(403)
         repo.remover(fonte_id)
         flash(f"Fonte '{fonte.nome}' removida.", "ok")
         return redirect(url_for("fontes"))
@@ -399,6 +428,50 @@ def _registrar(app: Flask) -> None:
             "ok",
         )
         return redirect(url_for("fontes"))
+
+    # -- Curadoria de fontes (plataforma avalia as privadas sugeridas) ------
+    @app.route("/curadoria")
+    @plataforma_obrigatoria
+    def curadoria():
+        from ..fontes import CandidataRepository
+
+        status = request.args.get("status") or "pendente"
+        repo = CandidataRepository(_db())
+        empresas = {e.id: e.nome for e in EmpresaRepository(_db()).listar()}
+        return render_template(
+            "curadoria.html",
+            candidatas=repo.listar(status=status),
+            status_atual=status,
+            empresas=empresas,
+        )
+
+    @app.route("/curadoria/<int:cid>/promover", methods=["POST"])
+    @plataforma_obrigatoria
+    def curadoria_promover(cid: int):
+        from ..fontes import CandidataRepository
+
+        repo = CandidataRepository(_db())
+        cand = repo.get(cid)
+        if cand is None:
+            abort(404)
+        # Torna a fonte privada parte do catálogo global.
+        if cand.get("fonte_id"):
+            FonteRepository(_db()).promover_para_global(cand["fonte_id"])
+        repo.definir_status(cid, "promovida")
+        flash(f"Fonte '{cand.get('nome')}' promovida ao catálogo global.", "ok")
+        return redirect(request.referrer or url_for("curadoria"))
+
+    @app.route("/curadoria/<int:cid>/descartar", methods=["POST"])
+    @plataforma_obrigatoria
+    def curadoria_descartar(cid: int):
+        from ..fontes import CandidataRepository
+
+        repo = CandidataRepository(_db())
+        if repo.get(cid) is None:
+            abort(404)
+        repo.definir_status(cid, "descartada")
+        flash("Sugestão descartada.", "ok")
+        return redirect(request.referrer or url_for("curadoria"))
 
     # -- Configurações (tema + e-mail) — globais da plataforma --------------
     @app.route("/settings", methods=["GET", "POST"])
@@ -622,7 +695,8 @@ def _registrar(app: Flask) -> None:
         repo_cap = CaptacaoRepository(_db())
         # Foco por região. Padrão: nacional (Brasil) primeiro.
         regiao = request.form.get("regiao", "__BR__")
-        fontes = repo_fontes.listar(apenas_ativas=True)
+        escopo = None if _is_plataforma(principal) else ("visiveis", principal.empresa_id)
+        fontes = repo_fontes.listar(apenas_ativas=True, escopo=escopo)
         if regiao == "__BR__":
             fontes = [f for f in fontes if "brasil" in (f.regiao or "").lower()]
         elif regiao:

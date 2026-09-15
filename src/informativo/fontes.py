@@ -36,9 +36,14 @@ class Fonte:
     idioma: Optional[str] = None
     relevancia: int = 3
     prioridade: int = 3
+    empresa_id: Optional[int] = None
     ativa: bool = True
     criado_em: Optional[str] = None
     atualizado_em: Optional[str] = None
+
+    @property
+    def global_(self) -> bool:
+        return self.empresa_id is None
 
 
 def _row_para_fonte(row: dict) -> Fonte:
@@ -51,6 +56,7 @@ def _row_para_fonte(row: dict) -> Fonte:
         idioma=row.get("idioma"),
         relevancia=int(row.get("relevancia", 3) or 3),
         prioridade=int(row.get("prioridade", 3) or 3),
+        empresa_id=row.get("empresa_id"),
         ativa=bool(row.get("ativa", 1)),
         criado_em=row.get("criado_em"),
         atualizado_em=row.get("atualizado_em"),
@@ -102,9 +108,26 @@ class FonteRepository:
         categoria: Optional[str] = None,
         regiao: Optional[str] = None,
         apenas_ativas: bool = False,
+        escopo=None,
     ) -> list[Fonte]:
+        """Lista fontes. ``escopo`` isola por empresa:
+
+        * ``None`` — todas (visão da plataforma);
+        * ``("visiveis", empresa_id)`` — globais + as privadas da empresa;
+        * ``("privadas", empresa_id)`` — só as privadas da empresa;
+        * ``("global",)`` — só o catálogo global.
+        """
         clausulas = []
         params: list = []
+        if escopo:
+            if escopo[0] == "visiveis":
+                clausulas.append("(empresa_id IS NULL OR empresa_id = ?)")
+                params.append(escopo[1])
+            elif escopo[0] == "privadas":
+                clausulas.append("empresa_id = ?")
+                params.append(escopo[1])
+            elif escopo[0] == "global":
+                clausulas.append("empresa_id IS NULL")
         if busca:
             clausulas.append("(LOWER(nome) LIKE LOWER(?) OR LOWER(url) LIKE LOWER(?))")
             termo = f"%{busca.strip()}%"
@@ -175,6 +198,7 @@ class FonteRepository:
         idioma: Optional[str] = None,
         relevancia: int = 3,
         prioridade: int = 3,
+        empresa_id: Optional[int] = None,
         ativa: bool = True,
     ) -> Fonte:
         nome = (nome or "").strip()
@@ -186,12 +210,12 @@ class FonteRepository:
         agora = self._agora()
         novo_id = self.db.insert(
             "INSERT INTO fontes (nome, url, categoria, regiao, idioma, "
-            "relevancia, prioridade, ativa, criado_em, atualizado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "relevancia, prioridade, empresa_id, ativa, criado_em, atualizado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 nome, url, categoria, regiao, idioma,
                 _clamp(relevancia), _clamp(prioridade),
-                1 if ativa else 0, agora, agora,
+                empresa_id, 1 if ativa else 0, agora, agora,
             ),
         )
         self.db.commit()
@@ -249,6 +273,14 @@ class FonteRepository:
         self.db.execute("DELETE FROM fontes WHERE id = ?", (fonte_id,))
         self.db.commit()
 
+    def promover_para_global(self, fonte_id: int) -> None:
+        """Torna uma fonte privada parte do catálogo global (empresa_id nulo)."""
+        self.db.execute(
+            "UPDATE fontes SET empresa_id = NULL, atualizado_em = ? WHERE id = ?",
+            (self._agora(), fonte_id),
+        )
+        self.db.commit()
+
     def importar(self, itens: list[dict]) -> dict:
         """Importa várias fontes de uma vez, ignorando URLs já cadastradas.
 
@@ -291,6 +323,62 @@ class FonteRepository:
             return 0
         resultado = self.importar(carregar_seed())
         return resultado["inseridas"]
+
+
+class CandidataRepository:
+    """Curadoria: fontes privadas sugeridas pelas empresas para avaliação.
+
+    Quando uma empresa cadastra uma fonte privada, um registro é guardado aqui
+    ('outro local') para a plataforma avaliar se vale promover ao catálogo
+    global em novas versões.
+    """
+
+    STATUS = ("pendente", "promovida", "descartada")
+
+    def __init__(self, db: Database):
+        self.db = db
+
+    def _agora(self) -> str:
+        return datetime.now(timezone.utc).isoformat()
+
+    def registrar(self, fonte: Fonte) -> None:
+        self.db.insert(
+            "INSERT INTO fontes_candidatas (fonte_id, empresa_id, nome, url, "
+            "categoria, regiao, status, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (fonte.id, fonte.empresa_id, fonte.nome, fonte.url,
+             fonte.categoria, fonte.regiao, "pendente", self._agora()),
+        )
+        self.db.commit()
+
+    def listar(self, *, status: Optional[str] = None) -> list[dict]:
+        if status:
+            return self.db.query_all(
+                "SELECT * FROM fontes_candidatas WHERE status = ? "
+                "ORDER BY criado_em DESC, id DESC",
+                (status,),
+            )
+        return self.db.query_all(
+            "SELECT * FROM fontes_candidatas ORDER BY criado_em DESC, id DESC"
+        )
+
+    def get(self, cid: int) -> Optional[dict]:
+        return self.db.query_one("SELECT * FROM fontes_candidatas WHERE id = ?", (cid,))
+
+    def definir_status(self, cid: int, status: str) -> None:
+        if status not in self.STATUS:
+            raise ValueError(f"Status inválido: {status!r}.")
+        self.db.execute(
+            "UPDATE fontes_candidatas SET status = ? WHERE id = ?", (status, cid)
+        )
+        self.db.commit()
+
+    def contar_pendentes(self) -> int:
+        return int(
+            self.db.scalar(
+                "SELECT COUNT(*) FROM fontes_candidatas WHERE status = 'pendente'"
+            )
+            or 0
+        )
 
 
 def _clamp(valor: int, minimo: int = 1, maximo: int = 5) -> int:

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Curadoria de Fontes — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Curadoria de Fontes</h1>
+    <p class="muted">Fontes privadas sugeridas pelas empresas. Avalie se vale
+       incluir no catálogo <strong>global</strong>.</p>
+  </div>
+  <div class="form-actions">
+    {% for s, rot in [('pendente','Pendentes'),('promovida','Promovidas'),('descartada','Descartadas')] %}
+      <a class="btn btn-sm {{ 'btn-primary' if status_atual == s }}" href="{{ url_for('curadoria', status=s) }}">{{ rot }}</a>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card">
+  {% if candidatas %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Fonte</th><th>Empresa</th><th>Categoria</th><th>País/Região</th><th>Sugerida em</th>
+          {% if status_atual == 'pendente' %}<th>Ações</th>{% endif %}</tr>
+      </thead>
+      <tbody>
+        {% for c in candidatas %}
+        <tr>
+          <td><a href="{{ c.url }}" target="_blank" rel="noopener">{{ c.nome }}</a></td>
+          <td>{{ empresas.get(c.empresa_id, '—') }}</td>
+          <td>{{ c.categoria or '—' }}</td>
+          <td>{{ c.regiao or '—' }}</td>
+          <td class="muted">{{ (c.criado_em or '')[:16].replace('T',' ') }}</td>
+          {% if status_atual == 'pendente' %}
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('curadoria_promover', cid=c.id) }}"
+                  onsubmit="return confirm('Promover {{ c.nome }} ao catálogo global?');">
+              <button type="submit" class="btn btn-sm btn-primary">Promover ao global</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('curadoria_descartar', cid=c.id) }}">
+              <button type="submit" class="btn btn-sm btn-danger">Descartar</button>
+            </form>
+          </td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nada em “{{ status_atual }}”.</p>
+  {% endif %}
+</div>
+{% endblock %}
