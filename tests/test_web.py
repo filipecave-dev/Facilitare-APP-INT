@@ -220,10 +220,12 @@ def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
         "base_url": "http://x:20128", "modelo": "deepseek-chat",
         "api_key": "k", "empresa_id": "", "ativo": "1",
     }, follow_redirects=True)
-    # descobre o id do provedor
+    # descobre o id do provedor e ATIVA as fontes (semente vem desativada)
     from informativo.provedores import ProvedorRepository
+    from informativo.fontes import FonteRepository
     with Database(app.config["DSN"]) as db:
         pid = ProvedorRepository(db).listar()[0].id
+        FonteRepository(db).definir_ativa_em_massa(True)
     # mocka a chamada ao modelo
     monkeypatch.setattr(
         "informativo.provedores.ClienteIA.chat",
@@ -231,7 +233,8 @@ def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
     )
     resp = client.post(
         "/captacao/rodar",
-        data={"provedor_id": str(pid), "quantidade": "3", "regiao": "__BR__"},
+        data={"provedor_id": str(pid), "quantidade": "3", "regiao": "__BR__",
+              "buscar_conteudo": "", "dias": "5"},
         follow_redirects=True,
     )
     assert "Captação concluída".encode() in resp.data

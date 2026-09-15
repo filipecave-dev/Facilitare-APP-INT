@@ -2,7 +2,18 @@
 
 from __future__ import annotations
 
-from informativo.coleta import _candidatos_feed, _parse_feed, _strip_html
+from datetime import datetime, timezone
+
+from informativo.coleta import _candidatos_feed, _parse_data, _parse_feed, _strip_html
+
+
+def test_parse_data_rss_e_atom():
+    d1 = _parse_data("Mon, 15 Sep 2026 11:11:00 -0300")
+    assert d1 is not None and d1.tzinfo is not None
+    d2 = _parse_data("2026-09-15T10:00:00Z")
+    assert d2 is not None and d2.year == 2026
+    assert _parse_data("data inválida") is None
+    assert _parse_data("") is None
 
 
 def test_strip_html_remove_tags_e_scripts():

@@ -57,6 +57,13 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         init_db(db)
         FonteRepository(db).semear_se_vazio()
         _bootstrap_admin(db)
+        # Ajuste único: desativa todas as fontes existentes uma vez (a ativação
+        # passa a ser decisão explícita do operador). Guardado por flag para
+        # não repetir e não sobrescrever ativações futuras.
+        sett = SettingsRepository(db)
+        if sett.get("fontes_desativadas_inicial") != "1":
+            FonteRepository(db).definir_ativa_em_massa(False)
+            sett.set("fontes_desativadas_inicial", "1")
 
     _registrar(app)
     return app
@@ -414,6 +421,21 @@ def _registrar(app: Flask) -> None:
         flash(f"Fonte '{fonte.nome}' removida.", "ok")
         return redirect(url_for("fontes"))
 
+    @app.route("/fontes/todas/<acao>", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def fontes_todas(acao: str):
+        if acao not in ("ativar", "desativar"):
+            abort(404)
+        principal = _principal()
+        # Plataforma opera o catálogo global; empresa, as próprias privadas.
+        escopo = ("global",) if _is_plataforma(principal) else ("privadas", principal.empresa_id)
+        FonteRepository(_db()).definir_ativa_em_massa(acao == "ativar", escopo=escopo)
+        flash(
+            "Todas as fontes " + ("ativadas." if acao == "ativar" else "desativadas."),
+            "ok",
+        )
+        return redirect(url_for("fontes"))
+
     @app.route("/fontes/importar", methods=["POST"])
     @plataforma_obrigatoria
     def fontes_importar():
@@ -709,6 +731,12 @@ def _registrar(app: Flask) -> None:
         # Busca o conteúdo real da fonte (RSS/HTML) para a IA resumir fatos
         # atuais, quando marcado (padrão). Sem isso o resumo é genérico.
         buscar_conteudo = request.form.get("buscar_conteudo", "1") == "1"
+        # Janela de datas: últimos N dias (padrão 5).
+        try:
+            dias = int(request.form.get("dias", 5))
+        except (TypeError, ValueError):
+            dias = 5
+        dias = max(1, min(30, dias))
 
         ok = falhas = 0
         primeiro_erro = None
@@ -717,8 +745,8 @@ def _registrar(app: Flask) -> None:
             if buscar_conteudo:
                 from ..coleta import coletar_conteudo
 
-                conteudo = coletar_conteudo(fonte.url)
-            system, prompt = prompt_para_fonte(fonte, conteudo)
+                conteudo = coletar_conteudo(fonte.url, dias=dias)
+            system, prompt = prompt_para_fonte(fonte, conteudo, dias=dias)
             try:
                 texto = cli.chat(prompt, system=system)
                 repo_cap.registrar(fonte, texto, provedor=provedor.nome,

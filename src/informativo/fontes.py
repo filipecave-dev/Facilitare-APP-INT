@@ -269,6 +269,24 @@ class FonteRepository:
         )
         self.db.commit()
 
+    def definir_ativa_em_massa(self, ativa: bool, *, escopo=None) -> None:
+        """Ativa/desativa fontes em massa. ``escopo`` como em :meth:`listar`."""
+        clausula, params = "", []
+        if escopo:
+            if escopo[0] == "privadas":
+                clausula = " WHERE empresa_id = ?"
+                params = [escopo[1]]
+            elif escopo[0] == "global":
+                clausula = " WHERE empresa_id IS NULL"
+            elif escopo[0] == "visiveis":
+                clausula = " WHERE empresa_id IS NULL OR empresa_id = ?"
+                params = [escopo[1]]
+        self.db.execute(
+            "UPDATE fontes SET ativa = ?, atualizado_em = ?" + clausula,
+            [1 if ativa else 0, self._agora()] + params,
+        )
+        self.db.commit()
+
     def remover(self, fonte_id: int) -> None:
         self.db.execute("DELETE FROM fontes WHERE id = ?", (fonte_id,))
         self.db.commit()
@@ -321,7 +339,12 @@ class FonteRepository:
         """
         if self.count() > 0:
             return 0
-        resultado = self.importar(carregar_seed())
+        # As fontes-semente entram DESATIVADAS por padrão: a ativação é uma
+        # decisão explícita (o operador liga o que vai monitorar).
+        itens = carregar_seed()
+        for it in itens:
+            it["ativa"] = False
+        resultado = self.importar(itens)
         return resultado["inseridas"]
 
 

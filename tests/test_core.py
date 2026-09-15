@@ -107,9 +107,20 @@ def test_semear_se_vazio(db):
     inseridas = repo.semear_se_vazio()
     assert inseridas == 80
     assert repo.count() == 80
+    # Semente entra DESATIVADA (ativação é decisão explícita do operador).
+    assert all(not f.ativa for f in repo.listar())
     # Idempotente: não duplica.
     assert repo.semear_se_vazio() == 0
     assert repo.count() == 80
+
+
+def test_ativar_desativar_em_massa(db):
+    repo = FonteRepository(db)
+    repo.semear_se_vazio()
+    repo.definir_ativa_em_massa(True)
+    assert all(f.ativa for f in repo.listar())
+    repo.definir_ativa_em_massa(False)
+    assert all(not f.ativa for f in repo.listar())
 
 
 def test_criar_normaliza_url_e_impede_duplicata(db):

@@ -35,8 +35,11 @@
         {% for r in regioes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
       </select>
     </label>
-    <label style="max-width:160px">Qtde de fontes
+    <label style="max-width:150px">Qtde de fontes
       <input type="number" name="quantidade" value="5" min="1" max="15">
+    </label>
+    <label style="max-width:150px">Período (dias)
+      <input type="number" name="dias" value="5" min="1" max="30">
     </label>
     <label class="check"><input type="checkbox" name="buscar_conteudo" value="1" checked> Buscar conteúdo da fonte (RSS/site)</label>
     <button type="submit" class="btn btn-primary">Rodar agora</button>

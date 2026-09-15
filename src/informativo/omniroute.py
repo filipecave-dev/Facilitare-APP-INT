@@ -197,7 +197,7 @@ def client_from_settings(settings_repo, timeout: int = 60) -> OmnirouteClient:
     )
 
 
-def prompt_para_fonte(fonte, conteudo: str = "") -> tuple[str, str]:
+def prompt_para_fonte(fonte, conteudo: str = "", dias: int = 5) -> tuple[str, str]:
     """Monta (system, prompt) para resumir as novidades de uma fonte.
 
     Se ``conteudo`` (texto coletado da fonte) for fornecido, a IA é instruída a
@@ -217,11 +217,18 @@ def prompt_para_fonte(fonte, conteudo: str = "") -> tuple[str, str]:
         partes.append(f"Região/País: {fonte.regiao}.")
 
     if conteudo:
+        from datetime import datetime, timedelta, timezone
+
+        hoje = datetime.now(timezone.utc)
+        inicio = (hoje - timedelta(days=dias)).strftime("%d/%m/%Y")
         partes.append(
+            f"Hoje é {hoje.strftime('%d/%m/%Y')}. Considere SOMENTE novidades dos "
+            f"últimos {dias} dias (a partir de {inicio}). Ignore itens mais antigos "
+            "e não invente datas nem fatos. "
             "Baseie-se APENAS no conteúdo recente da fonte abaixo. Liste em 3 a 5 "
             "tópicos os itens relevantes para viajantes; para cada item, inclua o "
-            "título/assunto. Ignore o que não for pertinente. Se nada no conteúdo "
-            "for relevante, responda exatamente: 'Sem itens relevantes nesta captura.'"
+            "título/assunto e a data quando houver. Se nada no período for "
+            "relevante, responda exatamente: 'Sem itens relevantes nesta captura.'"
             "\n\n=== CONTEÚDO DA FONTE ===\n" + conteudo
         )
     else:

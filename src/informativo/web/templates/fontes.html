@@ -8,11 +8,23 @@
       {% if is_plataforma %}Você gerencia o catálogo <strong>global</strong> e vê as privadas das empresas.
       {% else %}Você vê o catálogo <strong>global</strong> (leitura) e cadastra as <strong>suas fontes privadas</strong>.{% endif %}</p>
   </div>
-  {% if is_plataforma %}
-  <form class="inline-form" method="post" action="{{ url_for('fontes_importar') }}"
-        onsubmit="return confirm('Importar as fontes de referência (planilha)? URLs já cadastradas serão ignoradas.');">
-    <button type="submit" class="btn">Importar fontes de referência</button>
-  </form>
+  {% if pode_gerir %}
+  <div class="form-actions">
+    <form class="inline-form" method="post" action="{{ url_for('fontes_todas', acao='desativar') }}"
+          onsubmit="return confirm('Desativar TODAS as fontes {{ 'do catálogo global' if is_plataforma else 'privadas da sua empresa' }}?');">
+      <button type="submit" class="btn">Desativar todas</button>
+    </form>
+    <form class="inline-form" method="post" action="{{ url_for('fontes_todas', acao='ativar') }}"
+          onsubmit="return confirm('Ativar TODAS as fontes?');">
+      <button type="submit" class="btn">Ativar todas</button>
+    </form>
+    {% if is_plataforma %}
+    <form class="inline-form" method="post" action="{{ url_for('fontes_importar') }}"
+          onsubmit="return confirm('Importar as fontes de referência (planilha)? URLs já cadastradas serão ignoradas.');">
+      <button type="submit" class="btn">Importar referência</button>
+    </form>
+    {% endif %}
+  </div>
   {% endif %}
 </div>
 
