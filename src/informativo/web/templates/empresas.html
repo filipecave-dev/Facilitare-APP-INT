@@ -61,6 +61,7 @@
           <td>{% if e.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
           {% if pode_gerir %}
           <td>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('informativo', empresa_id=e.id) }}">Prévia</a>
             <a class="btn btn-sm" href="{{ url_for('empresa_editar', empresa_id=e.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('empresas_alternar', empresa_id=e.id) }}">
               <button type="submit" class="btn btn-sm">{{ 'Desativar' if e.ativa else 'Ativar' }}</button>
