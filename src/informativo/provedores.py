@@ -95,10 +95,14 @@ class ClienteIA:
 
     def _endpoint_openai(self) -> str:
         base = self.base_url
-        if base.endswith("/chat/completions"):
+        # Usuário pode colar a URL completa do chat/completions.
+        if "/chat/completions" in base:
             return base
-        if base.endswith("/v1"):
+        # Raízes de API que já incluem a versão/segmento (ex.: Gemini termina
+        # em '/v1beta/openai', OpenAI/DeepSeek em '/v1') recebem só o sufixo.
+        if base.endswith(("/openai", "/v1", "/v1beta", "/compat", "/api/v1")):
             return base + "/chat/completions"
+        # Host "cru" (ex.: OmniRoute http://localhost:20128).
         return base + "/v1/chat/completions"
 
     def _chat_openai(self, prompt, system, temperature, max_tokens) -> str:

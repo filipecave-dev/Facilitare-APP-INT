@@ -22,6 +22,17 @@ def db(tmp_path):
 def test_endpoints_por_formato():
     assert ClienteIA("openai", "http://x:20128", "m")._endpoint_openai() == \
         "http://x:20128/v1/chat/completions"
+    # Gemini (OpenAI-compatible) termina em /v1beta/openai -> só /chat/completions
+    assert ClienteIA(
+        "openai", "https://generativelanguage.googleapis.com/v1beta/openai", "m"
+    )._endpoint_openai() == \
+        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    # base terminando em /v1
+    assert ClienteIA("openai", "https://api.deepseek.com/v1", "m")._endpoint_openai() == \
+        "https://api.deepseek.com/v1/chat/completions"
+    # URL completa colada pelo usuário
+    assert ClienteIA("openai", "http://x/v1/chat/completions", "m")._endpoint_openai() == \
+        "http://x/v1/chat/completions"
     assert ClienteIA("anthropic", "https://api.anthropic.com", "m")._endpoint_anthropic() == \
         "https://api.anthropic.com/v1/messages"
 
