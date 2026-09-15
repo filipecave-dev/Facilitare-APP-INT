@@ -8,7 +8,13 @@
     <p class="muted">Reúne os itens <strong>aprovados</strong>, parafraseados pela IA,
        organizados nas frentes editoriais. {{ total }} item(ns) aprovado(s).</p>
   </div>
-  <a class="btn" href="{{ url_for('captacao', status='aprovada') }}">← Voltar à triagem</a>
+  <div class="form-actions">
+    <a class="btn btn-primary" target="_blank" rel="noopener"
+       href="{{ url_for('informativo_email', empresa_id=empresa.id) if empresa else url_for('informativo_email') }}">Ver e-mail final</a>
+    <a class="btn"
+       href="{{ url_for('informativo_email_baixar', empresa_id=empresa.id) if empresa else url_for('informativo_email_baixar') }}">Baixar e-mail (.html)</a>
+    <a class="btn" href="{{ url_for('captacao', status='aprovada') }}">← Voltar à triagem</a>
+  </div>
 </div>
 
 {% if is_plataforma %}

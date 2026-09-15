@@ -26,6 +26,7 @@ from typing import Optional
 
 from flask import (
     Flask,
+    Response,
     abort,
     flash,
     g,
@@ -979,6 +980,42 @@ def _registrar(app: Flask) -> None:
         if not ok and not falhas:
             flash("Nada a parafrasear: todos os aprovados já têm texto.", "aviso")
         return redirect(url_for("informativo", empresa_id=alvo_emp))
+
+    def _email_html_do_informativo(principal):
+        """Monta o HTML do e-mail final do informativo para a empresa-alvo."""
+        from ..informativo_email import montar_email_html, montar_grupos
+        from ..omniroute import CaptacaoRepository
+
+        somente = not _is_plataforma(principal)
+        empresa = _empresa_do_informativo(principal)
+        alvo_emp = empresa.id if empresa else principal.empresa_id
+        aprovadas = CaptacaoRepository(_db()).listar_recentes(
+            200, status="aprovada", empresa_id=alvo_emp,
+            somente_empresa=somente or empresa is not None,
+        )
+        template = None
+        if empresa and empresa.tem_template:
+            template = EmpresaRepository(_db()).obter_template(empresa.id)
+        html = montar_email_html(empresa, montar_grupos(aprovadas), template=template)
+        assunto = (empresa.assunto_email if empresa else "Informativo") or "Informativo"
+        return empresa, html, assunto
+
+    @app.route("/informativo/email")
+    @login_obrigatorio
+    def informativo_email():
+        _, html, _ = _email_html_do_informativo(_principal())
+        return Response(html, mimetype="text/html")
+
+    @app.route("/informativo/email/baixar")
+    @login_obrigatorio
+    def informativo_email_baixar():
+        empresa, html, _ = _email_html_do_informativo(_principal())
+        base = (empresa.nome if empresa else "informativo").lower()
+        base = "".join(ch if ch.isalnum() else "-" for ch in base).strip("-") or "informativo"
+        nome = f"informativo-{base}.html"
+        return Response(html, mimetype="text/html", headers={
+            "Content-Disposition": f'attachment; filename="{nome}"',
+        })
 
     # -- Empresas (clientes) — gestão global (plataforma) -------------------
     @app.route("/empresas")

@@ -251,6 +251,44 @@ def test_empresa_template_recusa_acima_de_2mb(db):
                              b"x" * (TEMPLATE_MAX_BYTES + 1))
 
 
+# -- e-mail final do informativo --------------------------------------------
+def test_montar_email_html():
+    from informativo.empresas import Empresa
+    from informativo.informativo_email import montar_email_html, montar_grupos
+
+    empresa = Empresa(
+        id=1, nome="ACME", nome_solucao="Boletim ACME",
+        assunto_email="Alertas de Viagem ACME", tema_primary="#2557d6",
+        fonte_modelo="classica",
+    )
+    aprovadas = [
+        {"fonte_nome": "Reuters", "frente": "Alerta",
+         "parafrase": "Greve afeta aeroportos.", "conteudo": "orig"},
+        {"fonte_nome": "G1", "frente": None,
+         "parafrase": "", "conteudo": "Sem paráfrase ainda."},
+    ]
+    html = montar_email_html(empresa, montar_grupos(aprovadas))
+    assert "Boletim ACME" in html
+    assert "Alertas de Viagem ACME" in html
+    assert "Alerta" in html and "Informativo" in html  # frentes com itens
+    assert "Greve afeta aeroportos." in html
+    assert "Sem paráfrase ainda." in html  # cai no conteúdo quando sem paráfrase
+    assert "Georgia" in html  # tipografia do modelo escolhido
+    assert html.strip().startswith("<!doctype html>")
+
+
+def test_montar_email_embute_template_imagem():
+    from informativo.empresas import Empresa
+    from informativo.informativo_email import montar_email_html, montar_grupos
+
+    empresa = Empresa(id=1, nome="ACME", nome_solucao="ACME", tem_template=True)
+    html = montar_email_html(
+        empresa, montar_grupos([]),
+        template=("fundo.png", "image/png", b"\x89PNGdados"),
+    )
+    assert "data:image/png;base64," in html  # fundo embutido (autocontido)
+
+
 # -- configurações ----------------------------------------------------------
 def test_settings_get_set(db):
     repo = SettingsRepository(db)
