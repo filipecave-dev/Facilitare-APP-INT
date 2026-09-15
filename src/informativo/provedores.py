@@ -56,26 +56,42 @@ class ClienteIA:
     def configurado(self) -> bool:
         return bool(self.base_url and self.modelo)
 
-    def _post(self, url: str, headers: dict, corpo: dict) -> dict:
-        req = urllib.request.Request(
-            url, data=json.dumps(corpo).encode("utf-8"), method="POST"
-        )
-        req.add_header("Content-Type", "application/json")
-        for chave, valor in headers.items():
-            req.add_header(chave, valor)
-        try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
-                return json.loads(resp.read().decode("utf-8"))
-        except urllib.error.HTTPError as exc:
-            detalhe = exc.read().decode("utf-8", errors="ignore")[:300]
-            raise IAError(f"HTTP {exc.code}: {detalhe}")
-        except urllib.error.URLError as exc:
-            raise IAError(
-                f"Não consegui conectar a {url}: {exc.reason}. "
-                "Verifique se a URL é acessível de onde o app roda."
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise IAError(f"Erro inesperado: {exc}")
+    # Códigos que indicam sobrecarga temporária (vale a pena tentar de novo).
+    _TRANSIENTES = {429, 500, 502, 503, 504}
+
+    def _post(self, url: str, headers: dict, corpo: dict,
+              tentativas: int = 3) -> dict:
+        import time
+
+        dados = json.dumps(corpo).encode("utf-8")
+        ultimo_erro = None
+        for i in range(tentativas):
+            req = urllib.request.Request(url, data=dados, method="POST")
+            req.add_header("Content-Type", "application/json")
+            for chave, valor in headers.items():
+                req.add_header(chave, valor)
+            try:
+                with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+                    return json.loads(resp.read().decode("utf-8"))
+            except urllib.error.HTTPError as exc:
+                detalhe = exc.read().decode("utf-8", errors="ignore")[:300]
+                ultimo_erro = IAError(f"HTTP {exc.code}: {detalhe}")
+                if exc.code in self._TRANSIENTES and i < tentativas - 1:
+                    time.sleep(2 * (i + 1))  # 2s, 4s
+                    continue
+                raise ultimo_erro
+            except urllib.error.URLError as exc:
+                ultimo_erro = IAError(
+                    f"Não consegui conectar a {url}: {exc.reason}. "
+                    "Verifique se a URL é acessível de onde o app roda."
+                )
+                if i < tentativas - 1:
+                    time.sleep(2 * (i + 1))
+                    continue
+                raise ultimo_erro
+            except Exception as exc:  # noqa: BLE001
+                raise IAError(f"Erro inesperado: {exc}")
+        raise ultimo_erro  # pragma: no cover
 
     def chat(
         self,
