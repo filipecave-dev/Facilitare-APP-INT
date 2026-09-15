@@ -37,6 +37,15 @@
 </header>
 {% endif %}
 
+{% if impersonador %}
+<div style="background: var(--warn-bg); color: var(--warn-ink); border-bottom: 1px solid var(--border); padding: 8px 20px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; font-size:14px;">
+  <span>👁️ Você está vendo o sistema como <strong>{{ session['nome'] }}</strong> ({{ principal.perfil }}) — modo personificação.</span>
+  <form method="post" action="{{ url_for('usuarios_voltar') }}" style="margin:0">
+    <button type="submit" class="btn btn-sm">Voltar ao meu acesso</button>
+  </form>
+</div>
+{% endif %}
+
 <main class="content">
   {% with mensagens = get_flashed_messages(with_categories=true) %}
     {% if mensagens %}

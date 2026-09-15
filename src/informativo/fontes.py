@@ -201,9 +201,19 @@ class FonteRepository:
 
     def atualizar(self, fonte_id: int, **campos) -> None:
         permitidos = {
-            "nome", "categoria", "regiao", "idioma",
+            "nome", "url", "categoria", "regiao", "idioma",
             "relevancia", "prioridade", "ativa",
         }
+        # URL: normaliza e impede duplicar a de outra fonte.
+        if "url" in campos:
+            url = _normalizar_url(campos["url"])
+            outra = self.db.scalar(
+                "SELECT COUNT(*) FROM fontes WHERE url = ? AND id <> ?",
+                (url, fonte_id),
+            )
+            if (outra or 0) > 0:
+                raise ValueError(f"Já existe outra fonte com a URL {url!r}.")
+            campos["url"] = url
         sets, params = [], []
         for chave, valor in campos.items():
             if chave not in permitidos:
@@ -212,6 +222,10 @@ class FonteRepository:
                 valor = _clamp(int(valor))
             if chave == "ativa":
                 valor = 1 if valor else 0
+            if chave == "nome":
+                valor = (valor or "").strip()
+                if not valor:
+                    raise ValueError("O nome da fonte é obrigatório.")
             sets.append(f"{chave} = ?")
             params.append(valor)
         if not sets:

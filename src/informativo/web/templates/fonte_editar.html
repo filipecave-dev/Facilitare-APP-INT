@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ fonte.nome }} — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Editar fonte</h1>
+    <p class="muted">Ajuste os dados desta fonte de informação.</p>
+  </div>
+  <a class="btn" href="{{ url_for('fontes') }}">Voltar</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('fontes_editar', fonte_id=fonte.id) }}">
+    <div class="grid">
+      <label>Fonte
+        <input type="text" name="nome" value="{{ fonte.nome }}" required>
+      </label>
+      <label>URL / Site
+        <input type="text" name="url" value="{{ fonte.url }}" required>
+      </label>
+      <label>Categoria
+        <input type="text" name="categoria" value="{{ fonte.categoria or '' }}" list="lst-categorias">
+        <datalist id="lst-categorias">
+          {% for c in categorias %}<option value="{{ c }}">{% endfor %}
+        </datalist>
+      </label>
+      <label>País/Região
+        <input type="text" name="regiao" value="{{ fonte.regiao or '' }}" list="lst-regioes">
+        <datalist id="lst-regioes">
+          {% for r in regioes %}<option value="{{ r }}">{% endfor %}
+        </datalist>
+      </label>
+      <label>Idioma
+        <input type="text" name="idioma" value="{{ fonte.idioma or '' }}">
+      </label>
+      <label>Relevância
+        <select name="relevancia">
+          {% for n in range(1,6) %}<option value="{{ n }}" {{ 'selected' if n == fonte.relevancia }}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Prioridade
+        <select name="prioridade">
+          {% for n in range(1,6) %}<option value="{{ n }}" {{ 'selected' if n == fonte.prioridade }}>{{ n }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="ativa" value="1" {{ 'checked' if fonte.ativa }}> Ativa
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Salvar alterações</button>
+      <a class="btn" href="{{ url_for('fontes') }}">Cancelar</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

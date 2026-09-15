@@ -131,6 +131,42 @@ def test_setup_senha_curta_ou_diferente(tmp_path):
     assert "não conferem".encode() in resp.data
 
 
+def test_editar_fonte(client, app):
+    _login(client)
+    from informativo.fontes import FonteRepository
+    with Database(app.config["DSN"]) as db:
+        fid = FonteRepository(db).criar("MinhaFonte", "minha.com", categoria="Geral").id
+    resp = client.post(f"/fontes/{fid}/editar", data={
+        "nome": "MinhaFonte Editada", "url": "minha.com",
+        "categoria": "Segurança", "regiao": "Brasil", "idioma": "Português",
+        "relevancia": "5", "prioridade": "4", "ativa": "1",
+    }, follow_redirects=True)
+    assert "atualizada".encode() in resp.data
+    with Database(app.config["DSN"]) as db:
+        f = FonteRepository(db).get(fid)
+    assert f.nome == "MinhaFonte Editada"
+    assert f.categoria == "Segurança" and f.relevancia == 5
+
+
+def test_personificar_e_voltar(client, app):
+    _login(client)  # admin
+    from informativo.auth import UsuarioRepository
+    with Database(app.config["DSN"]) as db:
+        UsuarioRepository(db).criar("editor1", "senha12345", "Editor", nome="Editor Um")
+    # personificar o editor
+    resp = client.post("/usuarios/personificar", data={"username": "editor1"},
+                       follow_redirects=True)
+    assert b"editor1" in resp.data
+    assert "personificação".encode() in resp.data  # banner no topo
+    # no modo personificação, a rota de usuários (admin) é bloqueada
+    assert client.get("/usuarios").status_code == 403
+    # o aviso de personificação aparece
+    assert "personificação".encode() in client.get("/dashboard").data
+    # voltar ao acesso de admin
+    resp = client.post("/usuarios/voltar", follow_redirects=True)
+    assert client.get("/usuarios").status_code == 200
+
+
 def test_admin_cria_usuario(client):
     _login(client)
     resp = client.post(

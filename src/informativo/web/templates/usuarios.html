@@ -34,7 +34,10 @@
   </form>
   <p class="help">Perfis: <strong>Administrador</strong> (acesso total, gerencia
     usuários e fontes) · <strong>Editor</strong> (cria/edita fontes e newsletters)
-    · <strong>Auditor</strong> (somente leitura).</p>
+    · <strong>Auditor</strong> (somente leitura).<br>
+    <strong>Personificar</strong>: entra no sistema vendo exatamente como aquele
+    usuário/editor — útil para acompanhar e dar suporte. Um aviso fica no topo e
+    o botão “Voltar ao meu acesso” retorna à sua conta.</p>
 </div>
 
 <div class="card">
@@ -60,6 +63,10 @@
           <td>{% if c.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
           <td>
             {% if c.username != principal.username %}
+            <form class="inline-form" method="post" action="{{ url_for('usuarios_personificar') }}">
+              <input type="hidden" name="username" value="{{ c.username }}">
+              <button type="submit" class="btn btn-sm" {{ 'disabled title=\"Usuário inativo\"' if not c.ativo }}>Personificar</button>
+            </form>
             <form class="inline-form" method="post" action="{{ url_for('usuarios_alternar') }}">
               <input type="hidden" name="username" value="{{ c.username }}">
               <button type="submit" class="btn btn-sm">{{ 'Desativar' if c.ativo else 'Ativar' }}</button>

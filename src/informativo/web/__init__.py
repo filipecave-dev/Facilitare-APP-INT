@@ -171,6 +171,7 @@ def _registrar(app: Flask) -> None:
             "principal": principal,
             "tema_css_vars": variaveis_css(cor),
             "PERFIS": PERFIS,
+            "impersonador": session.get("impersonador"),
         }
 
     # -- Autenticação -------------------------------------------------------
@@ -304,6 +305,37 @@ def _registrar(app: Flask) -> None:
         except ValueError as exc:
             flash(str(exc), "erro")
         return redirect(url_for("fontes"))
+
+    @app.route("/fontes/<int:fonte_id>/editar", methods=["GET", "POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def fontes_editar(fonte_id: int):
+        repo = FonteRepository(_db())
+        fonte = repo.get(fonte_id)
+        if fonte is None:
+            abort(404)
+        if request.method == "POST":
+            try:
+                repo.atualizar(
+                    fonte_id,
+                    nome=request.form.get("nome", fonte.nome),
+                    url=request.form.get("url", fonte.url),
+                    categoria=request.form.get("categoria") or None,
+                    regiao=request.form.get("regiao") or None,
+                    idioma=request.form.get("idioma") or None,
+                    relevancia=int(request.form.get("relevancia", fonte.relevancia) or 3),
+                    prioridade=int(request.form.get("prioridade", fonte.prioridade) or 3),
+                    ativa=request.form.get("ativa", "1") == "1",
+                )
+                flash("Fonte atualizada.", "ok")
+                return redirect(url_for("fontes"))
+            except ValueError as exc:
+                flash(str(exc), "erro")
+        return render_template(
+            "fonte_editar.html",
+            fonte=repo.get(fonte_id),
+            categorias=repo.categorias(),
+            regioes=repo.regioes(),
+        )
 
     @app.route("/fontes/<int:fonte_id>/alternar", methods=["POST"])
     @perfil_obrigatorio("Administrador", "Editor")
@@ -683,6 +715,40 @@ def _registrar(app: Flask) -> None:
             return redirect(url_for("usuarios"))
         repo.redefinir_senha(username, nova)
         flash(f"Senha de '{username}' redefinida.", "ok")
+        return redirect(url_for("usuarios"))
+
+    @app.route("/usuarios/personificar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuarios_personificar():
+        repo = UsuarioRepository(_db())
+        alvo = (request.form.get("username") or "").strip().lower()
+        conta = repo.get(alvo)
+        if conta is None:
+            abort(404)
+        principal = _principal()
+        if principal and alvo == principal.username:
+            flash("Você já está no seu próprio acesso.", "aviso")
+            return redirect(url_for("usuarios"))
+        # Guarda o admin original (mesmo ao trocar entre personificações).
+        session["impersonador"] = session.get("impersonador") or session["username"]
+        session["username"] = conta.username
+        session["nome"] = conta.nome or conta.username
+        flash(f"Você agora vê o sistema como '{conta.username}' ({conta.perfil}).", "ok")
+        return redirect(url_for("dashboard"))
+
+    @app.route("/usuarios/voltar", methods=["POST"])
+    @login_obrigatorio
+    def usuarios_voltar():
+        admin_user = session.pop("impersonador", None)
+        if not admin_user:
+            return redirect(url_for("dashboard"))
+        conta = UsuarioRepository(_db()).get(admin_user)
+        if conta is None:
+            session.clear()
+            return redirect(url_for("login"))
+        session["username"] = conta.username
+        session["nome"] = conta.nome or conta.username
+        flash("Você voltou ao seu acesso.", "ok")
         return redirect(url_for("usuarios"))
 
     @app.route("/usuarios/perfil", methods=["POST"])

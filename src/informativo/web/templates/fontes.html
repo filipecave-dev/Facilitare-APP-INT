@@ -118,6 +118,7 @@
           <td class="muted">{{ (f.criado_em or '')[:10] or '—' }}</td>
           {% if pode_editar %}
           <td>
+            <a class="btn btn-sm" href="{{ url_for('fontes_editar', fonte_id=f.id) }}">Editar</a>
             <form class="inline-form" method="post" action="{{ url_for('fontes_alternar', fonte_id=f.id) }}">
               <button type="submit" class="btn btn-sm">{{ 'Desativar' if f.ativa else 'Ativar' }}</button>
             </form>
