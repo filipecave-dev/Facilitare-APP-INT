@@ -62,15 +62,19 @@ CREATE TABLE IF NOT EXISTS fontes_candidatas (
 );
 
 CREATE TABLE IF NOT EXISTS empresas (
-    id            {pk},
-    nome          TEXT    NOT NULL UNIQUE,
-    nome_solucao  TEXT    NOT NULL,
-    assunto_email TEXT    NOT NULL DEFAULT '',
-    contato_email TEXT,
-    tema_primary  TEXT,
-    ativa         INTEGER NOT NULL DEFAULT 1,
-    criado_em     TEXT,
-    atualizado_em TEXT
+    id             {pk},
+    nome           TEXT    NOT NULL UNIQUE,
+    nome_solucao   TEXT    NOT NULL,
+    assunto_email  TEXT    NOT NULL DEFAULT '',
+    contato_email  TEXT,
+    tema_primary   TEXT,
+    fonte_modelo   TEXT,
+    template_nome  TEXT,
+    template_mime  TEXT,
+    template_dados TEXT,
+    ativa          INTEGER NOT NULL DEFAULT 1,
+    criado_em      TEXT,
+    atualizado_em  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS provedores_ia (
@@ -94,6 +98,8 @@ CREATE TABLE IF NOT EXISTS captacoes (
     provedor   TEXT,
     empresa_id INTEGER,
     conteudo   TEXT,
+    parafrase  TEXT,
+    frente     TEXT,
     status     TEXT NOT NULL DEFAULT 'pendente',
     criado_em  TEXT
 );
@@ -245,7 +251,13 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "captacoes", "provedor", "TEXT")
     _garantir_coluna(db, "captacoes", "status", "TEXT NOT NULL DEFAULT 'pendente'")
     _garantir_coluna(db, "captacoes", "empresa_id", "INTEGER")
+    _garantir_coluna(db, "captacoes", "parafrase", "TEXT")
+    _garantir_coluna(db, "captacoes", "frente", "TEXT")
     _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")
     _garantir_coluna(db, "usuarios", "empresa_id", "INTEGER")
     _garantir_coluna(db, "fontes", "empresa_id", "INTEGER")
     _garantir_coluna(db, "fontes", "rss", "TEXT")
+    _garantir_coluna(db, "empresas", "fonte_modelo", "TEXT")
+    _garantir_coluna(db, "empresas", "template_nome", "TEXT")
+    _garantir_coluna(db, "empresas", "template_mime", "TEXT")
+    _garantir_coluna(db, "empresas", "template_dados", "TEXT")

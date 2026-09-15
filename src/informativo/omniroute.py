@@ -117,6 +117,8 @@ class CaptacaoRepository:
     """
 
     STATUS = ("pendente", "aprovada", "descartada")
+    # Três frentes do informativo (mapa mental): classificação editorial.
+    FRENTES = ("Alerta", "Informativo", "Notícias de Mercado")
 
     def __init__(self, db):
         self.db = db
@@ -169,6 +171,45 @@ class CaptacaoRepository:
             "UPDATE captacoes SET status = ? WHERE id = ?", (status, captacao_id)
         )
         self.db.commit()
+
+    def definir_frente(self, captacao_id: int, frente) -> None:
+        """Reclassifica a captação em uma das frentes (ou limpa com None)."""
+        if frente not in (None, "") and frente not in self.FRENTES:
+            raise ValueError(f"Frente inválida: {frente!r}.")
+        self.db.execute(
+            "UPDATE captacoes SET frente = ? WHERE id = ?",
+            (frente or None, captacao_id),
+        )
+        self.db.commit()
+
+    def definir_parafrase(self, captacao_id: int, texto: str) -> None:
+        """Guarda o texto parafraseado pela IA para uso no informativo."""
+        self.db.execute(
+            "UPDATE captacoes SET parafrase = ? WHERE id = ?",
+            (texto, captacao_id),
+        )
+        self.db.commit()
+
+    def limpar(self, *, status=None, empresa_id=None,
+               somente_empresa: bool = False) -> int:
+        """Remove captações (opcionalmente só de um status), respeitando escopo.
+
+        Devolve o número de registros removidos. A plataforma (``somente_empresa``
+        falso) pode limpar tudo; uma empresa limpa apenas as suas.
+        """
+        clausulas, params = [], []
+        if status:
+            clausulas.append("status = ?")
+            params.append(status)
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        if cl:
+            clausulas.append(cl)
+            params += pa
+        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        n = int(self.db.scalar("SELECT COUNT(*) FROM captacoes" + where, params) or 0)
+        self.db.execute("DELETE FROM captacoes" + where, params)
+        self.db.commit()
+        return n
 
     def contar_por_status(self, *, empresa_id=None,
                           somente_empresa: bool = False) -> dict:
@@ -236,4 +277,31 @@ def prompt_para_fonte(fonte, conteudo: str = "", dias: int = 5) -> tuple[str, st
             "Não foi possível coletar o conteúdo recente desta fonte. Deixe claro "
             "que não há dados coletados e sugira verificar a fonte diretamente."
         )
+    return system, "\n".join(partes)
+
+
+def prompt_parafrase(captacao: dict, *, nome_solucao: str = "") -> tuple[str, str]:
+    """Monta (system, prompt) para a IA **parafrasear** um item aprovado.
+
+    A paráfrase reescreve o resumo captado com texto original (sem cópia literal),
+    pronto para entrar no informativo. Recebe o dicionário da captação.
+    """
+    frente = (captacao.get("frente") or "Informativo").strip()
+    system = (
+        "Você é redator de um informativo de viagens corporativas. Reescreva o "
+        "conteúdo recebido com TEXTO ORIGINAL (paráfrase), em português do Brasil, "
+        "sem copiar frases literais e sem inventar fatos ou datas. Mantenha o tom "
+        f"editorial da frente '{frente}'. Produza um parágrafo curto (2 a 4 frases) "
+        "com um título curto na primeira linha, no formato:\nTítulo: <título>\n"
+        "<parágrafo>."
+    )
+    partes = []
+    if nome_solucao:
+        partes.append(f"Solução/cliente: {nome_solucao}.")
+    if captacao.get("fonte_nome"):
+        partes.append(f"Fonte: {captacao['fonte_nome']}.")
+    if captacao.get("regiao"):
+        partes.append(f"Região/País: {captacao['regiao']}.")
+    partes.append(f"Frente editorial: {frente}.")
+    partes.append("=== CONTEÚDO A PARAFRASEAR ===\n" + (captacao.get("conteudo") or ""))
     return system, "\n".join(partes)

@@ -13,6 +13,7 @@ from informativo.omniroute import (
     CaptacaoRepository,
     OmnirouteClient,
     OmnirouteError,
+    prompt_parafrase,
     prompt_para_fonte,
 )
 
@@ -88,3 +89,50 @@ def test_captacao_repository(db):
     recentes = cap.listar_recentes()
     assert recentes[0]["fonte_nome"] == "Reuters"
     assert recentes[0]["conteudo"] == "resumo de teste"
+
+
+def test_reclassificar_e_parafrasear(db):
+    repo_f = FonteRepository(db)
+    f = repo_f.criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    cap.registrar(f, "resumo original")
+    cid = cap.listar_recentes()[0]["id"]
+    # reclassificar em uma frente (mesmo após aprovado)
+    cap.definir_status(cid, "aprovada")
+    cap.definir_frente(cid, "Alerta")
+    assert cap.get(cid)["frente"] == "Alerta"
+    with pytest.raises(ValueError):
+        cap.definir_frente(cid, "Inexistente")
+    # limpar frente com vazio
+    cap.definir_frente(cid, "")
+    assert cap.get(cid)["frente"] is None
+    # guardar paráfrase
+    cap.definir_parafrase(cid, "texto reescrito")
+    assert cap.get(cid)["parafrase"] == "texto reescrito"
+
+
+def test_limpar_captacoes_por_status(db):
+    repo_f = FonteRepository(db)
+    f = repo_f.criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    cap.registrar(f, "a")
+    cap.registrar(f, "b")
+    ids = [c["id"] for c in cap.listar_recentes()]
+    cap.definir_status(ids[0], "aprovada")
+    # limpa só as pendentes
+    assert cap.limpar(status="pendente") == 1
+    assert cap.count() == 1
+    # limpa tudo
+    assert cap.limpar() == 1
+    assert cap.count() == 0
+
+
+def test_prompt_parafrase_tem_frente_e_conteudo(db):
+    cap = {
+        "fonte_nome": "Reuters", "regiao": "Brasil",
+        "frente": "Notícias de Mercado", "conteudo": "texto base",
+    }
+    system, prompt = prompt_parafrase(cap, nome_solucao="Boletim ACME")
+    assert "paráfrase" in system.lower() or "reescreva" in system.lower()
+    assert "Notícias de Mercado" in system
+    assert "texto base" in prompt and "Boletim ACME" in prompt

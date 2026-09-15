@@ -216,6 +216,41 @@ def test_variaveis_css_tem_chaves_essenciais():
     assert set(v) == {"--primary", "--primary-ink", "--badge-bg", "--badge-ink"}
 
 
+# -- empresas: template e modelo de fonte -----------------------------------
+def test_empresa_template_e_modelo_de_fonte(db):
+    from informativo.empresas import (
+        EmpresaRepository, MODELOS_FONTE, familia_do_modelo,
+    )
+
+    repo = EmpresaRepository(db)
+    e = repo.criar("ACME", nome_solucao="Boletim ACME")
+    # modelo de fonte
+    assert set(MODELOS_FONTE) >= {"classica", "moderna", "corporativa", "editorial"}
+    repo.atualizar(e.id, fonte_modelo="classica")
+    assert repo.get(e.id).fonte_modelo == "classica"
+    assert "Georgia" in familia_do_modelo("classica")
+    assert familia_do_modelo(None)  # cai no padrão
+    # template
+    assert repo.get(e.id).tem_template is False
+    repo.salvar_template(e.id, "fundo.png", "image/png", b"\x89PNGdados")
+    emp = repo.get(e.id)
+    assert emp.tem_template and emp.template_nome == "fundo.png"
+    nome, mime, dados = repo.obter_template(e.id)
+    assert nome == "fundo.png" and mime == "image/png" and dados == b"\x89PNGdados"
+    repo.remover_template(e.id)
+    assert repo.get(e.id).tem_template is False
+
+
+def test_empresa_template_recusa_acima_de_2mb(db):
+    from informativo.empresas import EmpresaRepository, TEMPLATE_MAX_BYTES
+
+    repo = EmpresaRepository(db)
+    e = repo.criar("Grande")
+    with pytest.raises(ValueError):
+        repo.salvar_template(e.id, "big.bin", "application/octet-stream",
+                             b"x" * (TEMPLATE_MAX_BYTES + 1))
+
+
 # -- configurações ----------------------------------------------------------
 def test_settings_get_set(db):
     repo = SettingsRepository(db)

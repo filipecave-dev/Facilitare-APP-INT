@@ -21,6 +21,7 @@
     <a href="{{ url_for('dashboard') }}" class="{{ 'ativo' if request.endpoint == 'dashboard' }}">Início</a>
     <a href="{{ url_for('fontes') }}" class="{{ 'ativo' if request.endpoint == 'fontes' }}">Fontes</a>
     <a href="{{ url_for('captacao') }}" class="{{ 'ativo' if request.endpoint == 'captacao' }}">Captação</a>
+    <a href="{{ url_for('informativo') }}" class="{{ 'ativo' if request.endpoint == 'informativo' }}">Informativo</a>
     {% if plat and principal.perfil == 'Administrador' %}
       <a href="{{ url_for('curadoria') }}" class="{{ 'ativo' if request.endpoint == 'curadoria' }}">Curadoria</a>
       <a href="{{ url_for('empresas') }}" class="{{ 'ativo' if request.endpoint in ('empresas', 'empresa_editar') }}">Empresas</a>

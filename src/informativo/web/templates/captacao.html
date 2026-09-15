@@ -7,6 +7,9 @@
     <h1>Captação &amp; Triagem</h1>
     <p class="muted">Consultas feitas pelas IAs. Escolha o que será utilizado.</p>
   </div>
+  <div class="form-actions">
+    <a class="btn btn-primary" href="{{ url_for('informativo') }}">Montar Informativo →</a>
+  </div>
 </div>
 
 <div class="cards">
@@ -59,6 +62,17 @@
       {% for s, rot in [('pendente','Aguardando'),('aprovada','Aprovadas'),('descartada','Descartadas')] %}
         <a class="btn btn-sm {{ 'btn-primary' if status_atual == s }}" href="{{ url_for('captacao', status=s) }}">{{ rot }}</a>
       {% endfor %}
+      {% if pode_rodar %}
+      <form class="inline-form" method="post" action="{{ url_for('captacao_limpar') }}"
+            onsubmit="return confirm('Limpar as captações de “{{ status_atual }}”?');">
+        <input type="hidden" name="status" value="{{ status_atual }}">
+        <button type="submit" class="btn btn-sm btn-danger">Limpar “{{ status_atual }}”</button>
+      </form>
+      <form class="inline-form" method="post" action="{{ url_for('captacao_limpar') }}"
+            onsubmit="return confirm('Limpar TODAS as captações (todos os status)?');">
+        <button type="submit" class="btn btn-sm btn-danger">Limpar tudo</button>
+      </form>
+      {% endif %}
     </div>
   </div>
 
@@ -74,8 +88,15 @@
       </div>
       <div class="muted" style="font-size:13px;margin-bottom:6px">
         {{ c.categoria or '—' }}{% if c.regiao %} · {{ c.regiao }}{% endif %}
+        {% if c.frente %}· <span class="pill on">{{ c.frente }}</span>{% endif %}
       </div>
       <div style="white-space:pre-wrap;margin-bottom:10px">{{ c.conteudo }}</div>
+      {% if c.parafrase %}
+      <div class="card note" style="background:#eef6ff;margin-bottom:10px">
+        <div class="muted" style="font-size:12px;margin-bottom:4px">Paráfrase (IA) para o informativo</div>
+        <div style="white-space:pre-wrap">{{ c.parafrase }}</div>
+      </div>
+      {% endif %}
       {% if pode_rodar %}
       <div class="form-actions">
         {% if c.status != 'aprovada' %}
@@ -94,6 +115,26 @@
         </form>
         {% endif %}
       </div>
+      {% if c.status == 'aprovada' %}
+      <div class="form-actions" style="margin-top:8px;border-top:1px dashed #d5deea;padding-top:8px">
+        <form class="inline-form" method="post" action="{{ url_for('captacao_frente', cid=c.id) }}">
+          <label class="muted" style="font-size:12px">Reclassificar
+            <select name="frente" onchange="this.form.submit()">
+              <option value="" {{ 'selected' if not c.frente }}>— sem frente —</option>
+              {% for fr in frentes %}<option value="{{ fr }}" {{ 'selected' if c.frente == fr }}>{{ fr }}</option>{% endfor %}
+            </select>
+          </label>
+          <noscript><button class="btn btn-sm">Aplicar</button></noscript>
+        </form>
+        {% if provedores %}
+        <form class="inline-form" method="post" action="{{ url_for('captacao_parafrasear', cid=c.id) }}"
+              onsubmit="var b=this.querySelector('button'); b.disabled=true; b.textContent='Gerando…';">
+          <input type="hidden" name="provedor_id" value="{{ provedores[0].id }}">
+          <button class="btn btn-sm">{{ 'Refazer paráfrase' if c.parafrase else 'Parafrasear (IA)' }}</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
       {% endif %}
     </div>
     {% endfor %}

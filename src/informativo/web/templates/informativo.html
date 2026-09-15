@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Informativo — montagem{% endblock %}
+{% set pode_rodar = principal.perfil in ('Administrador', 'Editor') %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Montar Informativo</h1>
+    <p class="muted">Reúne os itens <strong>aprovados</strong>, parafraseados pela IA,
+       organizados nas frentes editoriais. {{ total }} item(ns) aprovado(s).</p>
+  </div>
+  <a class="btn" href="{{ url_for('captacao', status='aprovada') }}">← Voltar à triagem</a>
+</div>
+
+{% if is_plataforma %}
+<div class="card">
+  <form method="get" action="{{ url_for('informativo') }}" class="form-actions">
+    <label style="max-width:320px">Empresa (cliente)
+      <select name="empresa_id" onchange="this.form.submit()">
+        <option value="">— selecione uma empresa —</option>
+        {% for e in empresas %}
+        <option value="{{ e.id }}" {{ 'selected' if empresa and empresa.id == e.id }}>{{ e.nome }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <noscript><button class="btn">Ver</button></noscript>
+  </form>
+</div>
+{% endif %}
+
+{% if pode_rodar and provedores %}
+<div class="card">
+  <form method="post" action="{{ url_for('informativo_parafrasear_tudo') }}" class="form-actions"
+        onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Gerando paráfrases…';">
+    {% if empresa %}<input type="hidden" name="empresa_id" value="{{ empresa.id }}">{% endif %}
+    <label style="max-width:300px">Provedor de IA
+      <select name="provedor_id" required>
+        {% for p in provedores %}<option value="{{ p.id }}">{{ p.nome }} — {{ p.modelo }}</option>{% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Parafrasear tudo (IA)</button>
+    <span class="muted">Gera o texto apenas dos itens ainda sem paráfrase.</span>
+  </form>
+</div>
+{% elif pode_rodar %}
+<div class="card"><p class="muted">Nenhum provedor de IA ativo. Cadastre em
+  <a href="{{ url_for('provedores') }}">Provedores de IA</a> para gerar as paráfrases.</p></div>
+{% endif %}
+
+{% set bg_img = empresa and empresa.tem_template and empresa.template_mime and empresa.template_mime.startswith('image/') %}
+
+<div class="card">
+  <h2>Prévia do informativo{% if empresa %} — {{ empresa.nome_solucao }}{% endif %}</h2>
+  {% if empresa and empresa.tem_template and not bg_img %}
+  <p class="help">Template enviado ({{ empresa.template_mime }}) —
+     <a href="{{ url_for('empresa_template_arquivo', empresa_id=empresa.id) }}" target="_blank" rel="noopener">abrir arquivo</a>.
+     A prévia abaixo usa fundo apenas quando o template é uma imagem.</p>
+  {% endif %}
+  <div style="font-family: {{ familia_fonte }};
+              {% if bg_img %}background-image:url('{{ url_for('empresa_template_arquivo', empresa_id=empresa.id) }}');
+              background-size:cover;background-position:center;{% else %}background:#fff;{% endif %}
+              padding:24px;border:1px solid #d5deea;border-radius:10px">
+    <div style="background:rgba(255,255,255,.86);padding:18px;border-radius:8px">
+      <h2 style="margin-top:0;color: {{ empresa.tema_primary if empresa else '#2557d6' }}">
+        {{ empresa.nome_solucao if empresa else 'Informativo' }}</h2>
+      {% set algum = false %}
+      {% for frente, itens in grupos.items() %}
+        {% if itens %}
+        {% set algum = true %}
+        <h3 style="border-bottom:2px solid {{ empresa.tema_primary if empresa else '#2557d6' }};padding-bottom:4px">{{ frente }}</h3>
+        {% for c in itens %}
+        <div style="margin:0 0 14px">
+          <div style="white-space:pre-wrap">{{ c.parafrase or c.conteudo }}</div>
+          <div class="muted" style="font-size:12px;margin-top:2px">
+            Fonte: {{ c.fonte_nome }}{% if not c.parafrase %} · <em>(sem paráfrase — texto original)</em>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+      {% endfor %}
+      {% if not algum %}
+      <p class="muted">Nenhum item aprovado{% if is_plataforma and not empresa %} para a empresa selecionada{% endif %}.
+        Aprove conteúdos na <a href="{{ url_for('captacao') }}">Captação &amp; Triagem</a>.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

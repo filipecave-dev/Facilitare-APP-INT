@@ -531,6 +531,25 @@ def _registrar(app: Flask) -> None:
             return True
         return p is not None and p.empresa_id == principal.empresa_id
 
+    def _selecionar_provedor(principal, pid=None):
+        """Provedor de IA a usar: o escolhido (pid) ou o 1º ativo visível.
+
+        Respeita o escopo: empresa só usa provedores globais ou os próprios.
+        """
+        from ..provedores import ProvedorRepository
+
+        repo = ProvedorRepository(_db())
+        if pid:
+            p = repo.get(int(pid))
+            if p and p.ativo and (_is_plataforma(principal) or p.empresa_id is None
+                                  or p.empresa_id == principal.empresa_id):
+                return p
+        if _is_plataforma(principal):
+            ativos = repo.listar(apenas_ativos=True)
+        else:
+            ativos = [p for p in repo.listar_visiveis(principal.empresa_id) if p.ativo]
+        return ativos[0] if ativos else None
+
     @app.route("/provedores")
     @perfil_obrigatorio("Administrador", "Editor")
     def provedores():
@@ -696,6 +715,7 @@ def _registrar(app: Flask) -> None:
             empresas=EmpresaRepository(_db()).listar(),
             regioes=repo_fontes.regioes(),
             total_ativas=repo_fontes.resumo()["ativas"],
+            frentes=CaptacaoRepository.FRENTES,
         )
 
     @app.route("/captacao/rodar", methods=["POST"])
@@ -797,6 +817,169 @@ def _registrar(app: Flask) -> None:
         repo.definir_status(cid, mapa[acao])
         return redirect(request.referrer or url_for("captacao"))
 
+    @app.route("/captacao/limpar", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_limpar():
+        """Limpa as captações (todas ou de um status), respeitando o escopo."""
+        from ..omniroute import CaptacaoRepository
+
+        principal = _principal()
+        somente = not _is_plataforma(principal)
+        status = request.form.get("status") or None
+        if status and status not in CaptacaoRepository.STATUS:
+            status = None
+        n = CaptacaoRepository(_db()).limpar(
+            status=status, empresa_id=principal.empresa_id, somente_empresa=somente
+        )
+        alvo = f"'{status}'" if status else "de todos os status"
+        flash(f"{n} captação(ões) {alvo} removida(s).", "ok")
+        return redirect(url_for("captacao", status=status or "pendente"))
+
+    @app.route("/captacao/<int:cid>/frente", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_frente(cid: int):
+        """Reclassifica (mesmo após aprovado) o conteúdo em uma das frentes."""
+        from ..omniroute import CaptacaoRepository
+
+        repo = CaptacaoRepository(_db())
+        cap = repo.get(cid)
+        if cap is None:
+            abort(404)
+        principal = _principal()
+        if not _is_plataforma(principal) and cap.get("empresa_id") != principal.empresa_id:
+            abort(403)
+        frente = request.form.get("frente") or None
+        try:
+            repo.definir_frente(cid, frente)
+            flash("Conteúdo reclassificado.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(request.referrer or url_for("captacao", status="aprovada"))
+
+    @app.route("/captacao/<int:cid>/parafrasear", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_parafrasear(cid: int):
+        """Gera a paráfrase do item via IA conectada, para o informativo."""
+        from ..omniroute import CaptacaoRepository, prompt_parafrase
+        from ..provedores import IAError
+
+        repo = CaptacaoRepository(_db())
+        cap = repo.get(cid)
+        if cap is None:
+            abort(404)
+        principal = _principal()
+        if not _is_plataforma(principal) and cap.get("empresa_id") != principal.empresa_id:
+            abort(403)
+        provedor = _selecionar_provedor(principal, request.form.get("provedor_id"))
+        if provedor is None:
+            flash("Selecione um provedor de IA ativo para gerar a paráfrase.", "erro")
+            return redirect(request.referrer or url_for("captacao", status="aprovada"))
+        nome_solucao = ""
+        if cap.get("empresa_id"):
+            emp = EmpresaRepository(_db()).get(cap["empresa_id"])
+            nome_solucao = emp.nome_solucao if emp else ""
+        system, prompt = prompt_parafrase(cap, nome_solucao=nome_solucao)
+        try:
+            texto = provedor.cliente().chat(prompt, system=system)
+            repo.definir_parafrase(cid, texto)
+            flash(f"Paráfrase gerada via '{provedor.nome}'.", "ok")
+        except IAError as exc:
+            flash(f"Falha ao gerar paráfrase: {exc}", "erro")
+        return redirect(request.referrer or url_for("captacao", status="aprovada"))
+
+    # -- Informativo (montagem automática a partir dos aprovados) -----------
+    def _empresa_do_informativo(principal):
+        """Resolve a empresa-alvo do informativo (query param p/ plataforma)."""
+        if not _is_plataforma(principal):
+            return EmpresaRepository(_db()).get(principal.empresa_id)
+        eid = request.args.get("empresa_id") or request.form.get("empresa_id")
+        if eid:
+            return EmpresaRepository(_db()).get(int(eid))
+        return None
+
+    def _provedores_visiveis(principal):
+        from ..provedores import ProvedorRepository
+
+        repo = ProvedorRepository(_db())
+        if _is_plataforma(principal):
+            return repo.listar(apenas_ativos=True)
+        return [p for p in repo.listar_visiveis(principal.empresa_id) if p.ativo]
+
+    @app.route("/informativo")
+    @login_obrigatorio
+    def informativo():
+        from ..empresas import familia_do_modelo
+        from ..omniroute import CaptacaoRepository
+
+        principal = _principal()
+        somente = not _is_plataforma(principal)
+        emp = principal.empresa_id
+        empresa = _empresa_do_informativo(principal)
+        alvo_emp = empresa.id if empresa else emp
+        repo_cap = CaptacaoRepository(_db())
+        aprovadas = repo_cap.listar_recentes(
+            200, status="aprovada", empresa_id=alvo_emp,
+            somente_empresa=somente or empresa is not None,
+        )
+        # Agrupa por frente (as sem frente vão para 'Informativo').
+        grupos = {f: [] for f in CaptacaoRepository.FRENTES}
+        for c in aprovadas:
+            fr = c.get("frente") or "Informativo"
+            grupos.setdefault(fr, []).append(c)
+        familia = familia_do_modelo(empresa.fonte_modelo if empresa else None)
+        return render_template(
+            "informativo.html",
+            empresa=empresa,
+            grupos=grupos,
+            total=len(aprovadas),
+            familia_fonte=familia,
+            empresas=EmpresaRepository(_db()).listar() if _is_plataforma(principal) else [],
+            is_plataforma=_is_plataforma(principal),
+            provedores=_provedores_visiveis(principal),
+        )
+
+    @app.route("/informativo/parafrasear-tudo", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def informativo_parafrasear_tudo():
+        from ..empresas import familia_do_modelo  # noqa: F401
+        from ..omniroute import CaptacaoRepository, prompt_parafrase
+        from ..provedores import IAError
+
+        principal = _principal()
+        somente = not _is_plataforma(principal)
+        empresa = _empresa_do_informativo(principal)
+        alvo_emp = empresa.id if empresa else principal.empresa_id
+        provedor = _selecionar_provedor(principal, request.form.get("provedor_id"))
+        if provedor is None:
+            flash("Selecione um provedor de IA ativo para gerar as paráfrases.", "erro")
+            return redirect(url_for("informativo", empresa_id=alvo_emp))
+        repo = CaptacaoRepository(_db())
+        aprovadas = repo.listar_recentes(
+            200, status="aprovada", empresa_id=alvo_emp,
+            somente_empresa=somente or empresa is not None,
+        )
+        cli = provedor.cliente()
+        nome_solucao = empresa.nome_solucao if empresa else ""
+        ok = falhas = 0
+        erro = None
+        for c in aprovadas:
+            if (c.get("parafrase") or "").strip():
+                continue  # já parafraseado
+            system, prompt = prompt_parafrase(c, nome_solucao=nome_solucao)
+            try:
+                repo.definir_parafrase(c["id"], cli.chat(prompt, system=system))
+                ok += 1
+            except IAError as exc:
+                falhas += 1
+                erro = erro or str(exc)
+        if ok:
+            flash(f"{ok} paráfrase(s) gerada(s) via '{provedor.nome}'.", "ok")
+        if falhas:
+            flash(f"{falhas} falharam. Primeiro erro: {erro}", "erro" if not ok else "aviso")
+        if not ok and not falhas:
+            flash("Nada a parafrasear: todos os aprovados já têm texto.", "aviso")
+        return redirect(url_for("informativo", empresa_id=alvo_emp))
+
     # -- Empresas (clientes) — gestão global (plataforma) -------------------
     @app.route("/empresas")
     @plataforma_obrigatoria
@@ -844,6 +1027,7 @@ def _registrar(app: Flask) -> None:
                     tema_primary=normalizar_cor(
                         request.form.get("tema_primary", empresa.tema_primary or TEMA_PADRAO)
                     ),
+                    fonte_modelo=request.form.get("fonte_modelo") or None,
                     ativa=request.form.get("ativa", "1") == "1",
                 )
                 flash("Empresa atualizada.", "ok")
@@ -851,10 +1035,72 @@ def _registrar(app: Flask) -> None:
                 return redirect(url_for(destino))
             except ValueError as exc:
                 flash(str(exc), "erro")
+        from ..empresas import MODELOS_FONTE
         return render_template(
             "empresa_editar.html", empresa=empresa, presets=PRESETS,
             is_plataforma=_is_plataforma(principal),
+            modelos_fonte=MODELOS_FONTE,
         )
+
+    @app.route("/empresas/<int:empresa_id>/template", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresa_template_upload(empresa_id: int):
+        from ..empresas import TEMPLATE_MAX_BYTES
+
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        arquivo = request.files.get("template")
+        if not arquivo or not arquivo.filename:
+            flash("Selecione um arquivo de template.", "erro")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        dados = arquivo.read()
+        if len(dados) > TEMPLATE_MAX_BYTES:
+            flash("O template excede o limite de 2 MB.", "erro")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        try:
+            repo.salvar_template(
+                empresa_id, arquivo.filename,
+                arquivo.mimetype or "application/octet-stream", dados,
+            )
+            flash("Template do informativo enviado.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+
+    @app.route("/empresas/<int:empresa_id>/template/remover", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresa_template_remover(empresa_id: int):
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        repo.remover_template(empresa_id)
+        flash("Template removido.", "ok")
+        return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+
+    @app.route("/empresas/<int:empresa_id>/template/arquivo")
+    @login_obrigatorio
+    def empresa_template_arquivo(empresa_id: int):
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        resultado = EmpresaRepository(_db()).obter_template(empresa_id)
+        if resultado is None:
+            abort(404)
+        nome, mime, dados = resultado
+        from flask import Response
+
+        return Response(dados, mimetype=mime, headers={
+            "Content-Disposition": f'inline; filename="{nome}"',
+        })
 
     @app.route("/empresas/<int:empresa_id>/alternar", methods=["POST"])
     @plataforma_obrigatoria

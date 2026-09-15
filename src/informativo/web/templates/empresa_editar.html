@@ -31,6 +31,14 @@
       <label>Cor de destaque
         <input type="color" name="tema_primary" value="{{ empresa.tema_primary or '#2557d6' }}" {{ '' if pode_gerir else 'disabled' }}>
       </label>
+      <label>Modelo de fonte (informativo)
+        <select name="fonte_modelo" {{ '' if pode_gerir else 'disabled' }}>
+          {% for chave, m in modelos_fonte.items() %}
+          <option value="{{ chave }}" {{ 'selected' if empresa.fonte_modelo == chave }}
+                  style="font-family: {{ m.familia }}">{{ m.rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
       <label class="check">
         <input type="checkbox" name="ativa" value="1" {{ 'checked' if empresa.ativa }} {{ '' if pode_gerir else 'disabled' }}> Empresa ativa
       </label>
@@ -50,5 +58,41 @@
     <p class="muted">Somente administradores podem editar empresas.</p>
     {% endif %}
   </form>
+</div>
+
+<div class="card">
+  <h2>Template de fundo do informativo</h2>
+  <p class="help">Envie um arquivo (imagem PNG/JPG, PDF ou HTML) para usar como
+     <strong>fundo/base</strong> do informativo deste cliente. Limite de <strong>2 MB</strong>.</p>
+  {% if empresa.tem_template %}
+  <div class="card note" style="margin:0 0 12px">
+    <div><span class="muted">Arquivo atual:</span>
+      <a href="{{ url_for('empresa_template_arquivo', empresa_id=empresa.id) }}" target="_blank" rel="noopener">
+        {{ empresa.template_nome }}</a>
+      {% if empresa.template_mime %}<span class="pill">{{ empresa.template_mime }}</span>{% endif %}
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum template enviado ainda.</p>
+  {% endif %}
+  {% if pode_gerir %}
+  <form method="post" enctype="multipart/form-data"
+        action="{{ url_for('empresa_template_upload', empresa_id=empresa.id) }}">
+    <div class="grid">
+      <label>Arquivo de template (até 2 MB)
+        <input type="file" name="template" accept="image/png,image/jpeg,image/webp,application/pdf,text/html" required>
+      </label>
+    </div>
+    <div class="form-actions" style="margin-top:12px">
+      <button type="submit" class="btn btn-primary">Enviar template</button>
+      {% if empresa.tem_template %}
+      <button type="submit" class="btn btn-danger"
+              formaction="{{ url_for('empresa_template_remover', empresa_id=empresa.id) }}"
+              formnovalidate
+              onclick="return confirm('Remover o template atual?');">Remover template</button>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
 </div>
 {% endblock %}
