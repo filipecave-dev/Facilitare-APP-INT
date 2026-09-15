@@ -24,6 +24,7 @@
     <a href="{{ url_for('newsletter_nova') }}">Newsletter</a>
     <a href="{{ url_for('auditoria') }}">Auditoria</a>
     {% if principal.perfil == 'Administrador' %}
+      <a href="{{ url_for('provedores') }}" class="{{ 'ativo' if request.endpoint == 'provedores' }}">Provedores</a>
       <a href="{{ url_for('usuarios') }}" class="{{ 'ativo' if request.endpoint == 'usuarios' }}">Usuários</a>
     {% endif %}
     <a href="{{ url_for('settings') }}" class="{{ 'ativo' if request.endpoint == 'settings' }}">Configurações</a>

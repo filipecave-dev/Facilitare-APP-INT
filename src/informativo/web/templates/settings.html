@@ -34,29 +34,6 @@
   </div>
 
   <div class="card">
-    <h2>Omniroute (captação por IA)</h2>
-    <p class="help">Usado para trazer as informações das fontes. Informe a URL
-      base do Omniroute, a chave e o modelo (ex.: uma das IAs conectadas —
-      <code>deepseek-chat</code>, <code>gemini-1.5-flash</code>, <code>groq/llama-3.1-70b</code>).</p>
-    <div class="grid">
-      <label>URL base do Omniroute
-        <input type="text" name="omniroute_url" value="{{ omniroute_url }}"
-               placeholder="http://localhost:20128  ou  https://seu-tunel.exemplo">
-      </label>
-      <label>Modelo
-        <input type="text" name="omniroute_modelo" value="{{ omniroute_modelo }}"
-               placeholder="ex.: deepseek-chat">
-      </label>
-      <label>Chave de API — Omniroute
-        <input type="password" name="api_omniroute" value="{{ api_omniroute }}" placeholder="••••••••" autocomplete="off">
-      </label>
-    </div>
-    <p class="help">⚠️ O app precisa <strong>alcançar</strong> essa URL. Um app na
-      nuvem (Render) não enxerga <code>localhost</code> da sua máquina — nesse
-      caso use uma URL pública (ex.: túnel ngrok/cloudflared).</p>
-  </div>
-
-  <div class="card">
     <h2>Integrações de e-mail</h2>
     <p class="help">Credenciais usadas pelas telas de envio de newsletter (uso futuro).</p>
     <div class="grid">
@@ -66,17 +43,17 @@
     </div>
   </div>
 
+  {% if principal.perfil == 'Administrador' %}
+  <div class="card note">
+    <p>🤖 As conexões de IA (OmniRoute, GPT, DeepSeek, Gemini, Claude) para a
+       captação ficam em <a href="{{ url_for('provedores') }}">Provedores de IA</a>.</p>
+  </div>
+  {% endif %}
+
   <div class="form-actions">
     <button type="submit" class="btn btn-primary">Salvar configurações</button>
   </div>
 </form>
-
-{% if principal.perfil == 'Administrador' %}
-<form method="post" action="{{ url_for('settings_testar_omniroute') }}" class="form-actions" style="margin-top:-8px">
-  <button type="submit" class="btn">Testar conexão do Omniroute</button>
-  <span class="muted">Envia uma mensagem curta e mostra a resposta.</span>
-</form>
-{% endif %}
 
 <script>
   // Quando o usuário escolhe uma cor personalizada que não bate com nenhum

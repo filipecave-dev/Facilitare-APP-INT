@@ -153,22 +153,39 @@ def test_novo_usuario_consegue_logar(app):
     assert b"Painel Principal" in resp.data
 
 
-def test_salvar_e_rodar_captacao(client, app, monkeypatch):
+def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
     _login(client)
-    # configura Omniroute
-    client.post("/settings", data={
-        "tema_primary": "#2557d6", "api_email": "",
-        "api_omniroute": "chave", "omniroute_url": "http://x:20128",
-        "omniroute_modelo": "deepseek-chat",
+    # cadastra um provedor de IA
+    client.post("/provedores/criar", data={
+        "nome": "OmniRoute DeepSeek", "formato": "openai",
+        "base_url": "http://x:20128", "modelo": "deepseek-chat",
+        "api_key": "k", "empresa_id": "", "ativo": "1",
     }, follow_redirects=True)
+    # descobre o id do provedor
+    from informativo.provedores import ProvedorRepository
+    with Database(app.config["DSN"]) as db:
+        pid = ProvedorRepository(db).listar()[0].id
     # mocka a chamada ao modelo
     monkeypatch.setattr(
-        "informativo.omniroute.OmnirouteClient.chat",
+        "informativo.provedores.ClienteIA.chat",
         lambda self, prompt, **kw: "Resumo simulado da fonte.",
     )
-    resp = client.post("/captacao/rodar", data={"quantidade": "3"}, follow_redirects=True)
+    resp = client.post(
+        "/captacao/rodar",
+        data={"provedor_id": str(pid), "quantidade": "3"},
+        follow_redirects=True,
+    )
     assert "Captação concluída".encode() in resp.data
     assert "Resumo simulado da fonte.".encode() in resp.data
+    # a captação entra como pendente e pode ser aprovada
+    from informativo.omniroute import CaptacaoRepository
+    with Database(app.config["DSN"]) as db:
+        cap = CaptacaoRepository(db)
+        assert cap.contar_por_status()["pendente"] >= 1
+        cid = cap.listar_recentes(1)[0]["id"]
+    resp = client.post(f"/captacao/{cid}/aprovar", follow_redirects=True)
+    with Database(app.config["DSN"]) as db:
+        assert CaptacaoRepository(db).contar_por_status()["aprovada"] >= 1
 
 
 def test_salvar_tema(client, app):

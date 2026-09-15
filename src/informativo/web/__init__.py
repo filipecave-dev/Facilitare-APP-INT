@@ -337,20 +337,15 @@ def _registrar(app: Flask) -> None:
         )
         return redirect(url_for("fontes"))
 
-    # -- Configurações (tema + integrações) ---------------------------------
+    # -- Configurações (tema + e-mail) --------------------------------------
     @app.route("/settings", methods=["GET", "POST"])
     @login_obrigatorio
     def settings():
-        from ..omniroute import CFG_CHAVE, CFG_MODELO, CFG_URL
-
         repo = SettingsRepository(_db())
         if request.method == "POST":
             cor = normalizar_cor(request.form.get("tema_primary", TEMA_PADRAO))
             repo.set(CHAVE_TEMA, cor)
             repo.set("api_email", request.form.get("api_email", "").strip())
-            repo.set(CFG_CHAVE, request.form.get("api_omniroute", "").strip())
-            repo.set(CFG_URL, request.form.get("omniroute_url", "").strip())
-            repo.set(CFG_MODELO, request.form.get("omniroute_modelo", "").strip())
             flash("Configurações salvas.", "ok")
             return redirect(url_for("settings"))
         return render_template(
@@ -358,47 +353,98 @@ def _registrar(app: Flask) -> None:
             presets=PRESETS,
             cor_atual=repo.get(CHAVE_TEMA, TEMA_PADRAO),
             api_email=repo.get("api_email", ""),
-            api_omniroute=repo.get(CFG_CHAVE, ""),
-            omniroute_url=repo.get(CFG_URL, ""),
-            omniroute_modelo=repo.get(CFG_MODELO, ""),
         )
 
-    @app.route("/settings/testar-omniroute", methods=["POST"])
+    # -- Provedores de IA (conexões: OmniRoute/GPT/DeepSeek/Gemini/Claude) --
+    @app.route("/provedores")
     @perfil_obrigatorio("Administrador")
-    def settings_testar_omniroute():
-        from ..omniroute import OmnirouteError, client_from_settings
+    def provedores():
+        from ..provedores import ProvedorRepository
 
-        cli = client_from_settings(SettingsRepository(_db()), timeout=30)
+        return render_template(
+            "provedores.html",
+            provedores=ProvedorRepository(_db()).listar(),
+            empresas=EmpresaRepository(_db()).listar(),
+        )
+
+    @app.route("/provedores/criar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def provedores_criar():
+        from ..provedores import ProvedorRepository
+
         try:
-            resposta = cli.chat("Responda apenas: OK", max_tokens=10)
-            flash(f"Omniroute respondeu: {resposta[:120]}", "ok")
-        except OmnirouteError as exc:
-            flash(f"Falha no Omniroute: {exc}", "erro")
-        return redirect(url_for("settings"))
+            empresa_id = request.form.get("empresa_id") or None
+            empresa_id = int(empresa_id) if empresa_id else None
+            p = ProvedorRepository(_db()).criar(
+                request.form.get("nome", ""),
+                request.form.get("formato", "openai"),
+                request.form.get("base_url", ""),
+                request.form.get("modelo", ""),
+                api_key=request.form.get("api_key") or None,
+                empresa_id=empresa_id,
+                ativo=request.form.get("ativo", "1") == "1",
+            )
+            flash(f"Provedor '{p.nome}' cadastrado.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("provedores"))
 
-    # -- Captação (Omniroute) ----------------------------------------------
+    @app.route("/provedores/<int:pid>/alternar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def provedores_alternar(pid: int):
+        from ..provedores import ProvedorRepository
+
+        ProvedorRepository(_db()).alternar_ativo(pid)
+        return redirect(url_for("provedores"))
+
+    @app.route("/provedores/<int:pid>/remover", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def provedores_remover(pid: int):
+        from ..provedores import ProvedorRepository
+
+        ProvedorRepository(_db()).remover(pid)
+        flash("Provedor removido.", "ok")
+        return redirect(url_for("provedores"))
+
+    @app.route("/provedores/<int:pid>/testar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def provedores_testar(pid: int):
+        from ..provedores import IAError, ProvedorRepository
+
+        p = ProvedorRepository(_db()).get(pid)
+        if p is None:
+            abort(404)
+        try:
+            resposta = p.cliente(timeout=30).chat("Responda apenas: OK", max_tokens=10)
+            flash(f"'{p.nome}' respondeu: {resposta[:120]}", "ok")
+        except IAError as exc:
+            flash(f"Falha em '{p.nome}': {exc}", "erro")
+        return redirect(url_for("provedores"))
+
+    # -- Captação + triagem -------------------------------------------------
     @app.route("/captacao")
     @login_obrigatorio
     def captacao():
-        from ..omniroute import CaptacaoRepository, client_from_settings
+        from ..omniroute import CaptacaoRepository
+        from ..provedores import ProvedorRepository
 
-        cli = client_from_settings(SettingsRepository(_db()))
+        status = request.args.get("status") or "pendente"
+        repo_cap = CaptacaoRepository(_db())
         return render_template(
             "captacao.html",
-            captacoes=CaptacaoRepository(_db()).listar_recentes(50),
-            configurado=cli.configurado(),
+            captacoes=repo_cap.listar_recentes(80, status=status),
+            contagem=repo_cap.contar_por_status(),
+            status_atual=status,
+            provedores=ProvedorRepository(_db()).listar(apenas_ativos=True),
+            empresas=EmpresaRepository(_db()).listar(),
             total_ativas=FonteRepository(_db()).resumo()["ativas"],
         )
 
     @app.route("/captacao/rodar", methods=["POST"])
     @perfil_obrigatorio("Administrador", "Editor")
     def captacao_rodar():
-        from ..omniroute import (
-            CaptacaoRepository,
-            OmnirouteError,
-            client_from_settings,
-            prompt_para_fonte,
-        )
+        from ..omniroute import CaptacaoRepository, prompt_para_fonte
+        from ..provedores import IAError, ProvedorRepository
 
         try:
             quantidade = int(request.form.get("quantidade", 5))
@@ -406,11 +452,15 @@ def _registrar(app: Flask) -> None:
             quantidade = 5
         quantidade = max(1, min(15, quantidade))
 
-        cli = client_from_settings(SettingsRepository(_db()))
-        if not cli.configurado():
-            flash("Configure a URL e o modelo do Omniroute em Configurações.", "erro")
+        provedor = None
+        pid = request.form.get("provedor_id")
+        if pid:
+            provedor = ProvedorRepository(_db()).get(int(pid))
+        if provedor is None or not provedor.ativo:
+            flash("Selecione um provedor de IA ativo (cadastre em Provedores).", "erro")
             return redirect(url_for("captacao"))
 
+        cli = provedor.cliente()
         repo_fontes = FonteRepository(_db())
         repo_cap = CaptacaoRepository(_db())
         fontes = repo_fontes.listar(apenas_ativas=True)[:quantidade]
@@ -420,20 +470,31 @@ def _registrar(app: Flask) -> None:
             system, prompt = prompt_para_fonte(fonte)
             try:
                 texto = cli.chat(prompt, system=system)
-                repo_cap.registrar(fonte, texto)
+                repo_cap.registrar(fonte, texto, provedor=provedor.nome)
                 ok += 1
-            except OmnirouteError as exc:
+            except IAError as exc:
                 falhas += 1
                 if primeiro_erro is None:
                     primeiro_erro = str(exc)
         if ok:
-            flash(f"Captação concluída: {ok} fonte(s) resumida(s).", "ok")
+            flash(f"Captação concluída via '{provedor.nome}': {ok} fonte(s).", "ok")
         if falhas:
             flash(
                 f"{falhas} fonte(s) falharam. Primeiro erro: {primeiro_erro}",
                 "erro" if not ok else "aviso",
             )
         return redirect(url_for("captacao"))
+
+    @app.route("/captacao/<int:cid>/<acao>", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_status(cid: int, acao: str):
+        from ..omniroute import CaptacaoRepository
+
+        mapa = {"aprovar": "aprovada", "descartar": "descartada", "pendente": "pendente"}
+        if acao not in mapa:
+            abort(404)
+        CaptacaoRepository(_db()).definir_status(cid, mapa[acao])
+        return redirect(request.referrer or url_for("captacao"))
 
     # -- Empresas (clientes) ------------------------------------------------
     @app.route("/empresas")

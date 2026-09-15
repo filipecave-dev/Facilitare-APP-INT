@@ -110,28 +110,57 @@ class OmnirouteClient:
 
 
 class CaptacaoRepository:
-    """Armazena e lista os resumos captados por fonte."""
+    """Armazena, lista e faz a triagem dos resumos captados por fonte.
+
+    Cada captação tem um ``status``: ``pendente`` (aguardando escolha),
+    ``aprovada`` (pode ser utilizada) ou ``descartada``.
+    """
+
+    STATUS = ("pendente", "aprovada", "descartada")
 
     def __init__(self, db):
         self.db = db
 
-    def registrar(self, fonte, conteudo: str):
+    def registrar(self, fonte, conteudo: str, *, provedor: str = None):
         from datetime import datetime, timezone
 
         agora = datetime.now(timezone.utc).isoformat()
         self.db.insert(
             "INSERT INTO captacoes (fonte_id, fonte_nome, categoria, regiao, "
-            "conteudo, criado_em) VALUES (?, ?, ?, ?, ?, ?)",
+            "provedor, conteudo, status, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (fonte.id, fonte.nome, getattr(fonte, "categoria", None),
-             getattr(fonte, "regiao", None), conteudo, agora),
+             getattr(fonte, "regiao", None), provedor, conteudo, "pendente", agora),
         )
         self.db.commit()
 
-    def listar_recentes(self, limite: int = 50) -> list[dict]:
+    def listar_recentes(self, limite: int = 50, *, status: str = None) -> list[dict]:
+        if status:
+            return self.db.query_all(
+                "SELECT * FROM captacoes WHERE status = ? "
+                "ORDER BY criado_em DESC, id DESC LIMIT ?",
+                (status, limite),
+            )
         return self.db.query_all(
             "SELECT * FROM captacoes ORDER BY criado_em DESC, id DESC LIMIT ?",
             (limite,),
         )
+
+    def definir_status(self, captacao_id: int, status: str) -> None:
+        if status not in self.STATUS:
+            raise ValueError(f"Status inválido: {status!r}.")
+        self.db.execute(
+            "UPDATE captacoes SET status = ? WHERE id = ?", (status, captacao_id)
+        )
+        self.db.commit()
+
+    def contar_por_status(self) -> dict:
+        linhas = self.db.query_all(
+            "SELECT status, COUNT(*) AS n FROM captacoes GROUP BY status"
+        )
+        base = {s: 0 for s in self.STATUS}
+        for l in linhas:
+            base[l["status"]] = int(l["n"])
+        return base
 
     def count(self) -> int:
         return int(self.db.scalar("SELECT COUNT(*) FROM captacoes") or 0)

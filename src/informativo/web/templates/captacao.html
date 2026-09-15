@@ -4,50 +4,90 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Captação (Omniroute)</h1>
-    <p class="muted">Resumo por fonte ativa, gerado pelas IAs conectadas ao Omniroute.</p>
+    <h1>Captação &amp; Triagem</h1>
+    <p class="muted">Consultas feitas pelas IAs. Escolha o que será utilizado.</p>
   </div>
 </div>
 
-{% if not configurado %}
-<div class="card note">
-  <p>⚙️ O Omniroute ainda não está configurado. Vá em
-     <a href="{{ url_for('settings') }}">Configurações</a> e informe a
-     <strong>URL base</strong> e o <strong>modelo</strong>.</p>
+<div class="cards">
+  <div class="card stat"><span class="num">{{ contagem.pendente }}</span><span class="lbl">Aguardando escolha</span></div>
+  <div class="card stat"><span class="num">{{ contagem.aprovada }}</span><span class="lbl">Aprovadas (podem usar)</span></div>
+  <div class="card stat"><span class="num">{{ contagem.descartada }}</span><span class="lbl">Descartadas</span></div>
 </div>
-{% endif %}
 
 {% if pode_rodar %}
 <div class="card">
   <h2>Rodar captação</h2>
+  {% if provedores %}
   <form method="post" action="{{ url_for('captacao_rodar') }}" class="form-actions"
-        onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='Processando…';">
-    <label style="max-width:220px">Quantas fontes ativas (por prioridade)
+        onsubmit="var b=this.querySelector('button[type=submit]'); b.disabled=true; b.textContent='Processando…';">
+    <label style="max-width:280px">Provedor de IA
+      <select name="provedor_id" required>
+        {% for p in provedores %}
+        <option value="{{ p.id }}">{{ p.nome }} — {{ p.modelo }}{% if p.empresa_id %}{% for e in empresas %}{% if e.id == p.empresa_id %} ({{ e.nome }}){% endif %}{% endfor %}{% endif %}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label style="max-width:200px">Qtde de fontes (por prioridade)
       <input type="number" name="quantidade" value="5" min="1" max="15">
     </label>
-    <button type="submit" class="btn btn-primary" {{ '' if configurado else 'disabled' }}>Rodar agora</button>
-    <span class="muted">{{ total_ativas }} fontes ativas no total. Processa as de maior prioridade.</span>
+    <button type="submit" class="btn btn-primary">Rodar agora</button>
+    <span class="muted">{{ total_ativas }} fontes ativas.</span>
   </form>
+  {% else %}
+  <p class="muted">Nenhum provedor de IA ativo. Cadastre em
+     <a href="{{ url_for('provedores') }}">Provedores de IA</a>.</p>
+  {% endif %}
 </div>
 {% endif %}
 
 <div class="card">
-  <h2>Resultados recentes ({{ captacoes|length }})</h2>
+  <div class="page-head" style="margin-bottom:12px">
+    <h2 style="margin:0">Resultados</h2>
+    <div class="form-actions">
+      {% for s, rot in [('pendente','Aguardando'),('aprovada','Aprovadas'),('descartada','Descartadas')] %}
+        <a class="btn btn-sm {{ 'btn-primary' if status_atual == s }}" href="{{ url_for('captacao', status=s) }}">{{ rot }}</a>
+      {% endfor %}
+    </div>
+  </div>
+
   {% if captacoes %}
     {% for c in captacoes %}
     <div class="card note" style="margin-bottom:12px">
       <div class="page-head" style="margin-bottom:6px">
-        <strong>{{ c.fonte_nome }}</strong>
+        <div>
+          <strong>{{ c.fonte_nome }}</strong>
+          {% if c.provedor %}<span class="pill">{{ c.provedor }}</span>{% endif %}
+        </div>
         <span class="muted">{{ (c.criado_em or '')[:16].replace('T',' ') }}</span>
       </div>
       <div class="muted" style="font-size:13px;margin-bottom:6px">
         {{ c.categoria or '—' }}{% if c.regiao %} · {{ c.regiao }}{% endif %}
       </div>
-      <div style="white-space:pre-wrap">{{ c.conteudo }}</div>
+      <div style="white-space:pre-wrap;margin-bottom:10px">{{ c.conteudo }}</div>
+      {% if pode_rodar %}
+      <div class="form-actions">
+        {% if c.status != 'aprovada' %}
+        <form class="inline-form" method="post" action="{{ url_for('captacao_status', cid=c.id, acao='aprovar') }}">
+          <button class="btn btn-sm btn-primary">Aprovar</button>
+        </form>
+        {% endif %}
+        {% if c.status != 'descartada' %}
+        <form class="inline-form" method="post" action="{{ url_for('captacao_status', cid=c.id, acao='descartar') }}">
+          <button class="btn btn-sm btn-danger">Descartar</button>
+        </form>
+        {% endif %}
+        {% if c.status != 'pendente' %}
+        <form class="inline-form" method="post" action="{{ url_for('captacao_status', cid=c.id, acao='pendente') }}">
+          <button class="btn btn-sm">Voltar p/ pendente</button>
+        </form>
+        {% endif %}
+      </div>
+      {% endif %}
     </div>
     {% endfor %}
   {% else %}
-  <p class="muted">Nenhuma captação ainda. Configure o Omniroute e clique em “Rodar agora”.</p>
+  <p class="muted">Nada em “{{ status_atual }}”.</p>
   {% endif %}
 </div>
 {% endblock %}

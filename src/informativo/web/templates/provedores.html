@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Provedores de IA — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Provedores de IA</h1>
+    <p class="muted">Conexões usadas na captação. Podem ser do sistema (global)
+       ou de uma empresa específica — cada empresa usa a <strong>sua própria chave</strong>.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Adicionar conexão</h2>
+  <form method="post" action="{{ url_for('provedores_criar') }}">
+    <div class="grid">
+      <label>Nome
+        <input type="text" name="nome" required placeholder="ex.: OmniRoute · DeepSeek">
+      </label>
+      <label>Formato
+        <select name="formato">
+          <option value="openai">OpenAI-compatible (OmniRoute, GPT, DeepSeek, Gemini…)</option>
+          <option value="anthropic">Anthropic (Claude direto)</option>
+        </select>
+      </label>
+      <label>URL base
+        <input type="text" name="base_url" required list="urls-comuns"
+               placeholder="http://localhost:20128">
+        <datalist id="urls-comuns">
+          <option value="http://localhost:20128">
+          <option value="https://api.openai.com">
+          <option value="https://api.deepseek.com">
+          <option value="https://generativelanguage.googleapis.com/v1beta/openai">
+          <option value="https://api.anthropic.com">
+        </datalist>
+      </label>
+      <label>Modelo
+        <input type="text" name="modelo" required placeholder="ex.: deepseek-chat">
+      </label>
+      <label>Chave de API
+        <input type="password" name="api_key" placeholder="••••••••" autocomplete="off">
+      </label>
+      <label>Empresa (cliente)
+        <select name="empresa_id">
+          <option value="">Global (do sistema)</option>
+          {% for e in empresas %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Adicionar</button>
+    </div>
+  </form>
+  <p class="help">Exemplos de modelo: <code>deepseek-chat</code>,
+     <code>gemini-1.5-flash</code>, <code>gpt-4o-mini</code>,
+     <code>claude-haiku-4-5</code>. ⚠️ Se a URL for <code>localhost</code>, só um
+     app na mesma máquina a alcança; da nuvem, use uma URL pública (túnel).</p>
+</div>
+
+<div class="card">
+  <h2>Conexões ({{ provedores|length }})</h2>
+  {% if provedores %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Nome</th><th>Formato</th><th>Modelo</th><th>Empresa</th><th>Situação</th><th>Ações</th></tr>
+      </thead>
+      <tbody>
+        {% for p in provedores %}
+        <tr>
+          <td><strong>{{ p.nome }}</strong><br><span class="muted" style="font-size:12px">{{ p.base_url }}</span></td>
+          <td>{{ 'Claude' if p.formato == 'anthropic' else 'OpenAI' }}</td>
+          <td>{{ p.modelo }}</td>
+          <td>{% if p.empresa_id %}{% for e in empresas %}{% if e.id == p.empresa_id %}{{ e.nome }}{% endif %}{% endfor %}{% else %}<span class="muted">Global</span>{% endif %}</td>
+          <td>{% if p.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('provedores_testar', pid=p.id) }}">
+              <button type="submit" class="btn btn-sm">Testar</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('provedores_alternar', pid=p.id) }}">
+              <button type="submit" class="btn btn-sm">{{ 'Desativar' if p.ativo else 'Ativar' }}</button>
+            </form>
+            <form class="inline-form" method="post" action="{{ url_for('provedores_remover', pid=p.id) }}"
+                  onsubmit="return confirm('Remover a conexão {{ p.nome }}?');">
+              <button type="submit" class="btn btn-sm btn-danger">Remover</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="muted">Nenhuma conexão cadastrada. Adicione a primeira acima.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -58,13 +58,27 @@ CREATE TABLE IF NOT EXISTS empresas (
     atualizado_em TEXT
 );
 
+CREATE TABLE IF NOT EXISTS provedores_ia (
+    id         {pk},
+    nome       TEXT    NOT NULL,
+    formato    TEXT    NOT NULL DEFAULT 'openai',
+    base_url   TEXT    NOT NULL,
+    modelo     TEXT    NOT NULL,
+    api_key    TEXT,
+    empresa_id INTEGER,
+    ativo      INTEGER NOT NULL DEFAULT 1,
+    criado_em  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS captacoes (
     id         {pk},
     fonte_id   INTEGER,
     fonte_nome TEXT,
     categoria  TEXT,
     regiao     TEXT,
+    provedor   TEXT,
     conteudo   TEXT,
+    status     TEXT NOT NULL DEFAULT 'pendente',
     criado_em  TEXT
 );
 
@@ -186,7 +200,30 @@ class Database:
         return row[0]
 
 
+def _colunas_existentes(db: Database, tabela: str) -> set[str]:
+    if db.backend == "postgres":
+        rows = db.query_all(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = ?",
+            (tabela,),
+        )
+        return {r["column_name"] for r in rows}
+    rows = db.query_all(f"PRAGMA table_info({tabela})")
+    return {r["name"] for r in rows}
+
+
+def _garantir_coluna(db: Database, tabela: str, coluna: str, ddl: str) -> None:
+    """Adiciona uma coluna se ela ainda não existir (migração leve, portável)."""
+    if coluna not in _colunas_existentes(db, tabela):
+        db.execute(f"ALTER TABLE {tabela} ADD COLUMN {coluna} {ddl}")
+        db.commit()
+
+
 def init_db(db: Database) -> None:
-    """Cria as tabelas do esquema, caso ainda não existam."""
+    """Cria as tabelas do esquema (caso não existam) e aplica migrações leves."""
     db.executescript(SCHEMA_POSTGRES if db.backend == "postgres" else SCHEMA_SQLITE)
     db.commit()
+    # Migrações para bancos criados por versões anteriores (ex.: captacoes sem
+    # as colunas de triagem). CREATE TABLE IF NOT EXISTS não altera colunas.
+    _garantir_coluna(db, "captacoes", "provedor", "TEXT")
+    _garantir_coluna(db, "captacoes", "status", "TEXT NOT NULL DEFAULT 'pendente'")
+    _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")

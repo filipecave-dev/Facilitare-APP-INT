@@ -1,0 +1,99 @@
+"""Testes dos provedores de IA (conexões) e do cliente."""
+
+from __future__ import annotations
+
+import io
+import json
+
+import pytest
+
+from informativo.db import Database, init_db
+from informativo.empresas import EmpresaRepository
+from informativo.provedores import ClienteIA, IAError, ProvedorRepository
+
+
+@pytest.fixture()
+def db(tmp_path):
+    with Database(f"sqlite:///{tmp_path}/p.db") as conexao:
+        init_db(conexao)
+        yield conexao
+
+
+def test_endpoints_por_formato():
+    assert ClienteIA("openai", "http://x:20128", "m")._endpoint_openai() == \
+        "http://x:20128/v1/chat/completions"
+    assert ClienteIA("anthropic", "https://api.anthropic.com", "m")._endpoint_anthropic() == \
+        "https://api.anthropic.com/v1/messages"
+
+
+def test_criar_provedor_global_e_por_empresa(db):
+    er = EmpresaRepository(db)
+    empresa = er.criar("Acme")
+    pr = ProvedorRepository(db)
+    g = pr.criar("OmniRoute", "openai", "http://x:20128", "deepseek-chat", api_key="k")
+    e = pr.criar("Claude Acme", "anthropic", "https://api.anthropic.com",
+                 "claude-haiku-4-5", api_key="sk", empresa_id=empresa.id)
+    assert g.empresa_id is None
+    assert e.empresa_id == empresa.id
+    assert len(pr.listar()) == 2
+    assert len(pr.listar(empresa_id=empresa.id)) == 1
+
+
+def test_provedor_validacoes(db):
+    pr = ProvedorRepository(db)
+    with pytest.raises(ValueError):
+        pr.criar("", "openai", "http://x", "m")
+    with pytest.raises(ValueError):
+        pr.criar("X", "formato-invalido", "http://x", "m")
+    with pytest.raises(ValueError):
+        pr.criar("X", "openai", "", "m")
+
+
+def test_alternar_e_remover(db):
+    pr = ProvedorRepository(db)
+    p = pr.criar("X", "openai", "http://x", "m")
+    assert pr.get(p.id).ativo is True
+    pr.alternar_ativo(p.id)
+    assert pr.get(p.id).ativo is False
+    pr.remover(p.id)
+    assert pr.get(p.id) is None
+
+
+def test_cliente_openai_parseia(monkeypatch):
+    payload = {"choices": [{"message": {"content": "  oi  "}}]}
+
+    class _R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake(req, timeout=None):
+        assert req.get_header("Authorization") == "Bearer k"
+        return _R(json.dumps(payload).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", fake)
+    assert ClienteIA("openai", "http://x", "m", "k").chat("oi") == "oi"
+
+
+def test_cliente_anthropic_parseia(monkeypatch):
+    payload = {"content": [{"type": "text", "text": "resposta claude"}]}
+
+    class _R(io.BytesIO):
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    def fake(req, timeout=None):
+        # headers da Anthropic
+        assert req.get_header("X-api-key") == "sk"
+        assert req.get_header("Anthropic-version") is not None
+        corpo = json.loads(req.data.decode())
+        assert corpo["max_tokens"] > 0
+        return _R(json.dumps(payload).encode())
+
+    monkeypatch.setattr("urllib.request.urlopen", fake)
+    cli = ClienteIA("anthropic", "https://api.anthropic.com", "claude-haiku-4-5", "sk")
+    assert cli.chat("oi", system="s") == "resposta claude"
+
+
+def test_cliente_sem_config():
+    with pytest.raises(IAError):
+        ClienteIA("openai", "", "m").chat("oi")
