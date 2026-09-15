@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Usuários — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Usuários</h1>
+    <p class="muted">Crie e gerencie os acessos ao sistema — para acompanhamento
+       das atividades e apoio na utilização.</p>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Criar usuário</h2>
+  <form method="post" action="{{ url_for('usuarios_criar') }}">
+    <div class="grid">
+      <label>Usuário (login ou e-mail)
+        <input type="text" name="username" required placeholder="ex.: joao ou joao@empresa.com" autocomplete="off">
+      </label>
+      <label>Nome
+        <input type="text" name="nome" placeholder="Nome completo">
+      </label>
+      <label>Perfil
+        <select name="perfil">
+          {% for p in PERFIS %}<option value="{{ p }}" {{ 'selected' if p == 'Editor' }}>{{ p }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Senha (mín. 8 caracteres)
+        <input type="password" name="senha" required minlength="8" autocomplete="new-password">
+      </label>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">Criar usuário</button>
+    </div>
+  </form>
+  <p class="help">Perfis: <strong>Administrador</strong> (acesso total, gerencia
+    usuários e fontes) · <strong>Editor</strong> (cria/edita fontes e newsletters)
+    · <strong>Auditor</strong> (somente leitura).</p>
+</div>
+
+<div class="card">
+  <h2>Usuários cadastrados ({{ contas|length }})</h2>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Situação</th><th>Ações</th></tr>
+      </thead>
+      <tbody>
+        {% for c in contas %}
+        <tr>
+          <td><strong>{{ c.username }}</strong>{% if c.username == principal.username %} <span class="pill">você</span>{% endif %}</td>
+          <td>{{ c.nome or '—' }}</td>
+          <td>
+            <form class="inline-form" method="post" action="{{ url_for('usuarios_perfil') }}">
+              <input type="hidden" name="username" value="{{ c.username }}">
+              <select name="perfil" onchange="this.form.submit()">
+                {% for p in PERFIS %}<option value="{{ p }}" {{ 'selected' if p == c.perfil }}>{{ p }}</option>{% endfor %}
+              </select>
+            </form>
+          </td>
+          <td>{% if c.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
+          <td>
+            {% if c.username != principal.username %}
+            <form class="inline-form" method="post" action="{{ url_for('usuarios_alternar') }}">
+              <input type="hidden" name="username" value="{{ c.username }}">
+              <button type="submit" class="btn btn-sm">{{ 'Desativar' if c.ativo else 'Ativar' }}</button>
+            </form>
+            {% endif %}
+            <form class="inline-form" method="post" action="{{ url_for('usuarios_senha') }}"
+                  onsubmit="var s=this.senha.value; if(!s||s.length<8){alert('A senha deve ter ao menos 8 caracteres.');return false;} return confirm('Redefinir a senha de {{ c.username }}?');">
+              <input type="password" name="senha" placeholder="nova senha" style="width:130px" minlength="8">
+              <input type="hidden" name="username" value="{{ c.username }}">
+              <button type="submit" class="btn btn-sm">Redefinir senha</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

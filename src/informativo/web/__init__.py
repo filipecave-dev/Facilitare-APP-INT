@@ -430,6 +430,80 @@ def _registrar(app: Flask) -> None:
         flash(f"Empresa '{empresa.nome}' removida.", "ok")
         return redirect(url_for("empresas"))
 
+    # -- Usuários (gestão de acesso pelo administrador) ---------------------
+    @app.route("/usuarios")
+    @perfil_obrigatorio("Administrador")
+    def usuarios():
+        contas = UsuarioRepository(_db()).listar()
+        return render_template("usuarios.html", contas=contas)
+
+    @app.route("/usuarios/criar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuarios_criar():
+        repo = UsuarioRepository(_db())
+        username = request.form.get("username", "")
+        senha = request.form.get("senha", "")
+        nome = request.form.get("nome") or None
+        perfil = request.form.get("perfil", "Editor")
+        if len(senha) < 8:
+            flash("A senha deve ter ao menos 8 caracteres.", "erro")
+            return redirect(url_for("usuarios"))
+        try:
+            conta = repo.criar(username, senha, perfil, nome=nome)
+            flash(f"Usuário '{conta.username}' criado (perfil {conta.perfil}).", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("usuarios"))
+
+    @app.route("/usuarios/alternar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuarios_alternar():
+        repo = UsuarioRepository(_db())
+        username = (request.form.get("username") or "").strip().lower()
+        principal = _principal()
+        if principal and username == principal.username:
+            flash("Você não pode desativar a sua própria conta.", "erro")
+            return redirect(url_for("usuarios"))
+        conta = repo.get(username)
+        if conta is None:
+            abort(404)
+        repo.set_ativo(username, not conta.ativo)
+        flash(
+            f"Usuário '{username}' {'ativado' if not conta.ativo else 'desativado'}.",
+            "ok",
+        )
+        return redirect(url_for("usuarios"))
+
+    @app.route("/usuarios/senha", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuarios_senha():
+        repo = UsuarioRepository(_db())
+        username = (request.form.get("username") or "").strip().lower()
+        nova = request.form.get("senha", "")
+        if repo.get(username) is None:
+            abort(404)
+        if len(nova) < 8:
+            flash("A nova senha deve ter ao menos 8 caracteres.", "erro")
+            return redirect(url_for("usuarios"))
+        repo.redefinir_senha(username, nova)
+        flash(f"Senha de '{username}' redefinida.", "ok")
+        return redirect(url_for("usuarios"))
+
+    @app.route("/usuarios/perfil", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuarios_perfil():
+        repo = UsuarioRepository(_db())
+        username = (request.form.get("username") or "").strip().lower()
+        perfil = request.form.get("perfil", "Editor")
+        if repo.get(username) is None:
+            abort(404)
+        try:
+            repo.definir_perfil(username, perfil)
+            flash(f"Perfil de '{username}' atualizado para {perfil}.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("usuarios"))
+
     # -- Placeholders navegáveis (próximas iterações) -----------------------
     _pagina_em_construcao(app, "newsletter_nova", "/newsletter/new", "Criar Newsletter")
     _pagina_em_construcao(app, "newsletter_preparo", "/newsletter/prepare", "Preparo do Texto")

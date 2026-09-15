@@ -131,6 +131,28 @@ def test_setup_senha_curta_ou_diferente(tmp_path):
     assert "não conferem".encode() in resp.data
 
 
+def test_admin_cria_usuario(client):
+    _login(client)
+    resp = client.post(
+        "/usuarios/criar",
+        data={"username": "editor1", "nome": "Editor Um",
+              "perfil": "Editor", "senha": "senha12345"},
+        follow_redirects=True,
+    )
+    assert b"editor1" in resp.data
+    assert "criado".encode() in resp.data
+
+
+def test_novo_usuario_consegue_logar(app):
+    from informativo.auth import UsuarioRepository
+    with Database(app.config["DSN"]) as db:
+        UsuarioRepository(db).criar("suporte", "senha12345", "Auditor", nome="Suporte")
+    c = app.test_client()
+    resp = c.post("/", data={"username": "suporte", "senha": "senha12345"},
+                  follow_redirects=True)
+    assert b"Painel Principal" in resp.data
+
+
 def test_salvar_tema(client, app):
     _login(client)
     client.post(

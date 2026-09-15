@@ -138,5 +138,31 @@ class UsuarioRepository:
             for r in self.db.query_all("SELECT * FROM usuarios ORDER BY username")
         ]
 
+    def set_ativo(self, username: str, ativo: bool) -> None:
+        """Ativa ou desativa uma conta (desativada não consegue logar)."""
+        self.db.execute(
+            "UPDATE usuarios SET ativo = ?, atualizado_em = ? WHERE username = ?",
+            (1 if ativo else 0, self._agora(), username.strip().lower()),
+        )
+        self.db.commit()
+
+    def redefinir_senha(self, username: str, nova_senha: str) -> None:
+        """Redefine a senha de uma conta existente (mantém perfil e nome)."""
+        senha_h = hash_senha(nova_senha)
+        self.db.execute(
+            "UPDATE usuarios SET senha_hash = ?, atualizado_em = ? WHERE username = ?",
+            (senha_h, self._agora(), username.strip().lower()),
+        )
+        self.db.commit()
+
+    def definir_perfil(self, username: str, perfil: str) -> None:
+        """Atualiza o perfil de acesso de uma conta."""
+        perfil = normalizar_perfil(perfil)
+        self.db.execute(
+            "UPDATE usuarios SET perfil = ?, atualizado_em = ? WHERE username = ?",
+            (perfil, self._agora(), username.strip().lower()),
+        )
+        self.db.commit()
+
     def count(self) -> int:
         return int(self.db.scalar("SELECT COUNT(*) FROM usuarios") or 0)

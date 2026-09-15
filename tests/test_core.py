@@ -78,6 +78,23 @@ def test_usuario_duplicado(db):
         repo.criar("joao", "outrasenha")
 
 
+def test_gestao_usuario_ativo_senha_perfil(db):
+    repo = UsuarioRepository(db)
+    repo.criar("maria", "senhaforte", "Editor")
+    # desativar impede login
+    repo.set_ativo("maria", False)
+    assert repo.autenticar("maria", "senhaforte") is None
+    repo.set_ativo("maria", True)
+    assert repo.autenticar("maria", "senhaforte") is not None
+    # redefinir senha
+    repo.redefinir_senha("maria", "novasenha1")
+    assert repo.autenticar("maria", "senhaforte") is None
+    assert repo.autenticar("maria", "novasenha1") is not None
+    # trocar perfil
+    repo.definir_perfil("maria", "Auditor")
+    assert repo.get("maria").perfil == "Auditor"
+
+
 # -- fontes -----------------------------------------------------------------
 def test_seed_carrega_80_fontes():
     seed = carregar_seed()
