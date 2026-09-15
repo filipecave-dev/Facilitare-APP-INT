@@ -4,559 +4,639 @@
     "url": "https://loyaltylobby.com",
     "categoria": "Greve / Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://loyaltylobby.com/feed"
   },
   {
     "nome": "AirHelp",
     "url": "https://www.airhelp.com",
     "categoria": "Greve / Cancelamentos",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Italy on Foot",
     "url": "https://italyonfoot.com",
     "categoria": "Greve",
     "regiao": "Itália",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://italyonfoot.com/feed/"
   },
   {
     "nome": "Strike Tracker",
     "url": "https://striketracker.app",
     "categoria": "Greve",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Tripiflys",
     "url": "https://www.tripiflys.com",
     "categoria": "Greve",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "NomadLawyer",
     "url": "https://nomadlawyer.org",
     "categoria": "Greve / Cancelamentos",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://nomadlawyer.org/feed.xml"
   },
   {
     "nome": "Unite the Union",
     "url": "https://www.unitetheunion.org",
     "categoria": "Greve",
     "regiao": "Reino Unido",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Wego Travel Blog",
     "url": "https://blog.wego.com",
     "categoria": "Greve / Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://blog.wego.com/feed/"
   },
   {
     "nome": "FlightGlobal",
     "url": "https://www.flightglobal.com",
     "categoria": "Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.flightglobal.com/feed"
   },
   {
     "nome": "Italianismo",
     "url": "https://italianismo.com.br",
     "categoria": "Greve / Itália",
     "regiao": "Itália",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://italianismo.com.br/feed/"
   },
   {
     "nome": "Diário de Viagens",
     "url": "https://diariodeviagens.skyteam.tur.br",
     "categoria": "Aviação",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://diariodeviagens.skyteam.tur.br/feed/"
   },
   {
     "nome": "PassageiroDePrimeira",
     "url": "https://passageirodeprimeira.com",
     "categoria": "Greve / Aviação",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://passageirodeprimeira.com/feed"
   },
   {
     "nome": "MelhoresDestinos",
     "url": "https://www.melhoresdestinos.com.br",
     "categoria": "Greve / Aviação",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.melhoresdestinos.com.br/feed"
   },
   {
     "nome": "Aerojota",
     "url": "https://aerojota.com.br",
     "categoria": "Aviação",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://aerojota.com.br/feed/"
   },
   {
     "nome": "Infomoney",
     "url": "https://www.infomoney.com.br",
     "categoria": "Greve / Cancelamentos",
     "regiao": "Brasil/Mundo",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.infomoney.com.br/feed/"
   },
   {
     "nome": "CNN Brasil Travel",
     "url": "https://www.cnnbrasil.com.br",
     "categoria": "Greve / Geral",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Euronews Travel",
     "url": "https://www.euronews.com/travel",
     "categoria": "Greve / Cancelamentos",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.euronews.com/rss?level=vertical&name=travel"
   },
   {
     "nome": "EuroWeeklyNews",
     "url": "https://euroweeklynews.com",
     "categoria": "Greve / Cancelamentos",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://euroweeklynews.com/feed/"
   },
   {
     "nome": "TravellingForBusiness",
     "url": "https://travellingforbusiness.co.uk",
     "categoria": "Greve / Corporativo",
     "regiao": "Reino Unido",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://travellingforbusiness.co.uk/feed/"
   },
   {
     "nome": "RTBF",
     "url": "https://www.rtbf.be",
     "categoria": "Greve",
     "regiao": "Bélgica",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Skift",
     "url": "https://skift.com",
     "categoria": "Aviação / Corporativo",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://skift.com/feed"
   },
   {
     "nome": "ThePointsGuy",
     "url": "https://thepointsguy.com",
     "categoria": "Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "View From The Wing",
     "url": "https://viewfromthewing.com",
     "categoria": "Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://viewfromthewing.com/feed/"
   },
   {
     "nome": "One Mile At A Time",
     "url": "https://onemileatatime.com",
     "categoria": "Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://onemileatatime.com/feed/"
   },
   {
     "nome": "US State Department",
     "url": "https://travel.state.gov",
     "categoria": "Segurança",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "OSAC",
     "url": "https://www.osac.gov",
     "categoria": "Segurança",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Embaixada EUA - Brasil",
     "url": "https://br.usembassy.gov",
     "categoria": "Segurança",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Embaixada EUA - UK",
     "url": "https://uk.usembassy.gov",
     "categoria": "Segurança",
     "regiao": "Reino Unido",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Embaixada EUA - Iraq",
     "url": "https://iq.usembassy.gov",
     "categoria": "Segurança",
     "regiao": "Iraque",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Embaixada EUA - UAE",
     "url": "https://ae.usembassy.gov",
     "categoria": "Segurança",
     "regiao": "EAU",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Embaixada EUA - França",
     "url": "https://fr.usembassy.gov",
     "categoria": "Segurança",
     "regiao": "França",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Itamaraty",
     "url": "https://www.gov.br/mre",
     "categoria": "Segurança",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.gov.br/mre/atom.xml"
   },
   {
     "nome": "UK Foreign Office (FCDO)",
     "url": "https://www.gov.uk/foreign-travel-advice",
     "categoria": "Segurança",
     "regiao": "Reino Unido",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.gov.uk/foreign-travel-advice.atom"
   },
   {
     "nome": "Canadá Travel Advisory",
     "url": "https://travel.gc.ca/travelling/advisories",
     "categoria": "Segurança",
     "regiao": "Canadá",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Austrália Smartraveller",
     "url": "https://www.smartraveller.gov.au",
     "categoria": "Segurança",
     "regiao": "Austrália",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "MI5",
     "url": "https://www.mi5.gov.uk/threat-levels",
     "categoria": "Segurança",
     "regiao": "Reino Unido",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Outlook Traveller",
     "url": "https://www.outlooktraveller.com",
     "categoria": "Segurança",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "CDC Travel Health",
     "url": "https://wwwnc.cdc.gov/travel",
     "categoria": "Saúde",
     "regiao": "EUA",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "WHO / OMS",
     "url": "https://www.who.int",
     "categoria": "Saúde",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.who.int/rss-feeds/news-english.xml"
   },
   {
     "nome": "PAHO",
     "url": "https://www.paho.org",
     "categoria": "Saúde",
     "regiao": "Américas",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.paho.org/rss.xml"
   },
   {
     "nome": "ECDC",
     "url": "https://www.ecdc.europa.eu",
     "categoria": "Saúde",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Ministério da Saúde BR",
     "url": "https://www.gov.br/saude",
     "categoria": "Saúde",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.gov.br/saude/rss.xml"
   },
   {
     "nome": "ProMED",
     "url": "https://promedmail.org",
     "categoria": "Saúde / Surtos",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "HealthMap",
     "url": "https://www.healthmap.org",
     "categoria": "Saúde / Surtos",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "USGS Earthquakes",
     "url": "https://earthquake.usgs.gov",
     "categoria": "Fenômeno Natural",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_week.atom"
   },
   {
     "nome": "JMA (Japão)",
     "url": "https://www.jma.go.jp",
     "categoria": "Fenômeno Natural",
     "regiao": "Japão",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "NOAA / NHC",
     "url": "https://www.nhc.noaa.gov",
     "categoria": "Fenômeno Natural",
     "regiao": "Américas",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.nhc.noaa.gov/gtwo.xml"
   },
   {
     "nome": "INMET",
     "url": "https://portal.inmet.gov.br",
     "categoria": "Fenômeno Natural",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Copernicus ECMWF",
     "url": "https://www.ecmwf.int",
     "categoria": "Fenômeno Natural",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.ecmwf.int/rss.xml"
   },
   {
     "nome": "Global Disaster Alert",
     "url": "https://gdacs.org",
     "categoria": "Fenômeno Natural",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Reuters",
     "url": "https://www.reuters.com",
     "categoria": "Geral / Segurança",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "BBC Travel",
     "url": "https://www.bbc.co.uk/news/travel",
     "categoria": "Geral",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://feeds.bbci.co.uk/news/world/rss.xml"
   },
   {
     "nome": "CNN Travel",
     "url": "https://edition.cnn.com/travel",
     "categoria": "Geral",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "http://rss.cnn.com/rss/edition_travel.rss"
   },
   {
     "nome": "AP News",
     "url": "https://apnews.com",
     "categoria": "Geral",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Bloomberg",
     "url": "https://www.bloomberg.com",
     "categoria": "Geral / Econômico",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "G1 Globo",
     "url": "https://g1.globo.com",
     "categoria": "Geral",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://g1.globo.com/rss/g1/"
   },
   {
     "nome": "UOL Notícias",
     "url": "https://noticias.uol.com.br",
     "categoria": "Geral",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Folha de S.Paulo",
     "url": "https://www.folha.uol.com.br",
     "categoria": "Geral",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://feeds.folha.uol.com.br/emcimadahora/rss091.xml"
   },
   {
     "nome": "El País Brasil",
     "url": "https://brasil.elpais.com",
     "categoria": "Geral",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://feeds.elpais.com/mrss-s/pages/ep/site/brasil.elpais.com/portada"
   },
   {
     "nome": "Business Travel News",
     "url": "https://www.businesstravelnews.com",
     "categoria": "Corporativo",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "The Beat - GBTA",
     "url": "https://www.thebeat.travel",
     "categoria": "Corporativo",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "BTN Europe",
     "url": "https://www.btneurope.com",
     "categoria": "Corporativo",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Travel Weekly",
     "url": "https://www.travelweekly.com",
     "categoria": "Corporativo / Aviação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Travel + Leisure",
     "url": "https://www.travelandleisure.com",
     "categoria": "Geral / Viagens",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Travel And Tour World",
     "url": "https://www.travelandtourworld.com",
     "categoria": "Geral",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.travelandtourworld.com/feed/"
   },
   {
     "nome": "Diário do Turismo",
     "url": "https://diariodoturismo.com.br",
     "categoria": "Greve / Turismo",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Panrotas",
     "url": "https://www.panrotas.com.br",
     "categoria": "Aviação / Turismo",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Veja Viagem",
     "url": "https://vejia.abril.com.br/viagem",
     "categoria": "Turismo",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://veja.abril.com.br/feed/"
   },
   {
     "nome": "FAA",
     "url": "https://www.faa.gov",
     "categoria": "Cancelamentos / Regulação",
     "regiao": "EUA",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.faa.gov/rss.xml"
   },
   {
     "nome": "ANAC",
     "url": "https://www.anac.gov.br",
     "categoria": "Cancelamentos / Regulação",
     "regiao": "Brasil",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.anac.gov.br/rss.xml"
   },
   {
     "nome": "EASA",
     "url": "https://www.easa.europa.eu",
     "categoria": "Regulação",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "IATA",
     "url": "https://www.iata.org",
     "categoria": "Aviação / Regulação",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Eurocontrol",
     "url": "https://www.eurocontrol.int",
     "categoria": "ATC / Cancelamentos",
     "regiao": "Europa",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "VisaHQ",
     "url": "https://www.visahq.com",
     "categoria": "Regulação / Visto",
     "regiao": "Internacional",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "ANSA",
     "url": "https://www.ansa.it",
     "categoria": "Geral",
     "regiao": "Itália",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.ansa.it/rss.xml"
   },
   {
     "nome": "FlightClub Itália",
     "url": "https://www.theflightclub.it",
     "categoria": "Aviação",
     "regiao": "Itália",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   },
   {
     "nome": "Público Portugal",
     "url": "https://www.publico.pt",
     "categoria": "Geral / Greve",
     "regiao": "Portugal",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://feeds.feedburner.com/PublicoRSS"
   },
   {
     "nome": "Jornal de Negócios",
     "url": "https://www.jornaldenegocios.pt",
     "categoria": "Geral / Greve",
     "regiao": "Portugal",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://www.jornaldenegocios.pt/rss"
   },
   {
     "nome": "Merco Press",
     "url": "https://en.mercopress.com",
     "categoria": "Geral",
     "regiao": "América do Sul",
-    "ativa": true
+    "ativa": true,
+    "rss": "https://en.mercopress.com/rss/"
   },
   {
     "nome": "Infobae",
     "url": "https://www.infobae.com",
     "categoria": "Geral",
     "regiao": "América Latina",
-    "ativa": true
+    "ativa": true,
+    "rss": ""
   }
 ]

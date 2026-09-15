@@ -34,6 +34,7 @@ class Fonte:
     categoria: Optional[str] = None
     regiao: Optional[str] = None
     idioma: Optional[str] = None
+    rss: Optional[str] = None
     relevancia: int = 3
     prioridade: int = 3
     empresa_id: Optional[int] = None
@@ -54,6 +55,7 @@ def _row_para_fonte(row: dict) -> Fonte:
         categoria=row.get("categoria"),
         regiao=row.get("regiao"),
         idioma=row.get("idioma"),
+        rss=row.get("rss"),
         relevancia=int(row.get("relevancia", 3) or 3),
         prioridade=int(row.get("prioridade", 3) or 3),
         empresa_id=row.get("empresa_id"),
@@ -196,6 +198,7 @@ class FonteRepository:
         categoria: Optional[str] = None,
         regiao: Optional[str] = None,
         idioma: Optional[str] = None,
+        rss: Optional[str] = None,
         relevancia: int = 3,
         prioridade: int = 3,
         empresa_id: Optional[int] = None,
@@ -207,13 +210,14 @@ class FonteRepository:
         url = _normalizar_url(url)
         if self.existe_url(url):
             raise ValueError(f"Já existe uma fonte com a URL {url!r}.")
+        rss = (rss or "").strip() or None
         agora = self._agora()
         novo_id = self.db.insert(
-            "INSERT INTO fontes (nome, url, categoria, regiao, idioma, "
+            "INSERT INTO fontes (nome, url, categoria, regiao, idioma, rss, "
             "relevancia, prioridade, empresa_id, ativa, criado_em, atualizado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                nome, url, categoria, regiao, idioma,
+                nome, url, categoria, regiao, idioma, rss,
                 _clamp(relevancia), _clamp(prioridade),
                 empresa_id, 1 if ativa else 0, agora, agora,
             ),
@@ -225,7 +229,7 @@ class FonteRepository:
 
     def atualizar(self, fonte_id: int, **campos) -> None:
         permitidos = {
-            "nome", "url", "categoria", "regiao", "idioma",
+            "nome", "url", "categoria", "regiao", "idioma", "rss",
             "relevancia", "prioridade", "ativa",
         }
         # URL: normaliza e impede duplicar a de outra fonte.
@@ -291,6 +295,27 @@ class FonteRepository:
         self.db.execute("DELETE FROM fontes WHERE id = ?", (fonte_id,))
         self.db.commit()
 
+    def backfill_rss_da_semente(self) -> int:
+        """Preenche o campo ``rss`` das fontes existentes a partir da semente
+        (casando pela URL), sem sobrescrever RSS já definido. Retorna quantas
+        foram atualizadas."""
+        atualizadas = 0
+        for item in carregar_seed():
+            rss = (item.get("rss") or "").strip()
+            if not rss:
+                continue
+            try:
+                url = _normalizar_url(item["url"])
+            except (ValueError, KeyError):
+                continue
+            cur = self.db.execute(
+                "UPDATE fontes SET rss = ? WHERE url = ? AND (rss IS NULL OR rss = '')",
+                (rss, url),
+            )
+            atualizadas += getattr(cur, "rowcount", 0) or 0
+        self.db.commit()
+        return atualizadas
+
     def promover_para_global(self, fonte_id: int) -> None:
         """Torna uma fonte privada parte do catálogo global (empresa_id nulo)."""
         self.db.execute(
@@ -325,6 +350,7 @@ class FonteRepository:
                 categoria=item.get("categoria"),
                 regiao=item.get("regiao"),
                 idioma=item.get("idioma"),
+                rss=item.get("rss"),
                 relevancia=int(item.get("relevancia", 3) or 3),
                 prioridade=int(item.get("prioridade", 3) or 3),
                 ativa=bool(item.get("ativa", True)),

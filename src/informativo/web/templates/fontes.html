@@ -66,6 +66,9 @@
       <label>Idioma
         <input type="text" name="idioma" placeholder="Ex.: Português">
       </label>
+      <label>Feed RSS (opcional)
+        <input type="text" name="rss" placeholder="https://site.com/feed">
+      </label>
       <label>Relevância
         <select name="relevancia">
           {% for n in range(1,6) %}<option value="{{ n }}" {{ 'selected' if n == 3 }}>{{ n }}</option>{% endfor %}
@@ -129,7 +132,8 @@
         {% set minha = f.empresa_id is not none and f.empresa_id == minha_empresa %}
         {% set pode_f = is_plataforma or minha %}
         <tr>
-          <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a></td>
+          <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a>
+            {% if f.rss %}<span class="pill" title="{{ f.rss }}" style="background:#fff5e5;color:#9a6300">RSS</span>{% endif %}</td>
           <td>{% if f.empresa_id is none %}<span class="pill">Global</span>{% elif minha %}<span class="pill on">Privada</span>{% else %}<span class="pill off">Empresa</span>{% endif %}</td>
           <td>{{ f.categoria or '—' }}</td>
           <td>{{ f.regiao or '—' }}</td>

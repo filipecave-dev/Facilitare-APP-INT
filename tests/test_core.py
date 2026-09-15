@@ -102,6 +102,29 @@ def test_seed_carrega_80_fontes():
     assert all(item["nome"] and item["url"] for item in seed)
 
 
+def test_seed_tem_rss_para_varias():
+    seed = carregar_seed()
+    com_rss = [i for i in seed if i.get("rss")]
+    assert len(com_rss) >= 30  # feeds descobertos e cadastrados
+    assert all(i["rss"].startswith("http") for i in com_rss)
+
+
+def test_criar_e_backfill_rss(db):
+    repo = FonteRepository(db)
+    # cria a fonte SEM rss, com uma URL que existe na semente
+    seed = carregar_seed()
+    alvo = next(i for i in seed if i.get("rss"))
+    f = repo.criar(alvo["nome"], alvo["url"])
+    assert repo.get(f.id).rss in (None, "")
+    # backfill preenche a partir da semente (casando pela URL)
+    n = repo.backfill_rss_da_semente()
+    assert n >= 1
+    assert repo.get(f.id).rss == alvo["rss"]
+    # e um rss explícito é preservado
+    f2 = repo.criar("Custom", "custom.com", rss="https://custom.com/feed")
+    assert repo.get(f2.id).rss == "https://custom.com/feed"
+
+
 def test_semear_se_vazio(db):
     repo = FonteRepository(db)
     inseridas = repo.semear_se_vazio()

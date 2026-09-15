@@ -64,6 +64,11 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_desativadas_inicial") != "1":
             FonteRepository(db).definir_ativa_em_massa(False)
             sett.set("fontes_desativadas_inicial", "1")
+        # Backfill único: preenche o RSS das fontes existentes a partir da
+        # semente (feeds descobertos). Roda uma vez.
+        if sett.get("fontes_rss_backfill") != "1":
+            FonteRepository(db).backfill_rss_da_semente()
+            sett.set("fontes_rss_backfill", "1")
 
     _registrar(app)
     return app
@@ -349,6 +354,7 @@ def _registrar(app: Flask) -> None:
                 categoria=request.form.get("categoria") or None,
                 regiao=request.form.get("regiao") or None,
                 idioma=request.form.get("idioma") or None,
+                rss=request.form.get("rss") or None,
                 relevancia=int(request.form.get("relevancia", 3) or 3),
                 prioridade=int(request.form.get("prioridade", 3) or 3),
                 empresa_id=empresa_id,
@@ -381,6 +387,7 @@ def _registrar(app: Flask) -> None:
                     categoria=request.form.get("categoria") or None,
                     regiao=request.form.get("regiao") or None,
                     idioma=request.form.get("idioma") or None,
+                    rss=request.form.get("rss") or None,
                     relevancia=int(request.form.get("relevancia", fonte.relevancia) or 3),
                     prioridade=int(request.form.get("prioridade", fonte.prioridade) or 3),
                     ativa=request.form.get("ativa", "1") == "1",
@@ -745,7 +752,9 @@ def _registrar(app: Flask) -> None:
             if buscar_conteudo:
                 from ..coleta import coletar_conteudo
 
-                conteudo = coletar_conteudo(fonte.url, dias=dias)
+                conteudo = coletar_conteudo(
+                    fonte.url, feed_url=(fonte.rss or ""), dias=dias
+                )
             system, prompt = prompt_para_fonte(fonte, conteudo, dias=dias)
             try:
                 texto = cli.chat(prompt, system=system)

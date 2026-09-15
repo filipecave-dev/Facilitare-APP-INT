@@ -119,22 +119,24 @@ def _candidatos_feed(url: str) -> list[str]:
     ]
 
 
-def coletar_conteudo(url: str, *, timeout: int = 12, max_chars: int = 3500,
-                     dias: int = 0) -> str:
+def coletar_conteudo(url: str, *, feed_url: str = "", timeout: int = 12,
+                     max_chars: int = 3500, dias: int = 0) -> str:
     """Devolve um trecho com o conteúdo recente da fonte, ou '' se não obtiver.
 
-    Se ``dias > 0``, mantém apenas itens do feed publicados nos últimos ``dias``
-    dias (itens sem data são preservados). Isso foca a captação em notícias
-    recentes e reduz o volume de texto enviado à IA (menos tokens).
+    Se ``feed_url`` (RSS cadastrado) for informado, ele é tentado primeiro —
+    mais preciso e econômico. Se ``dias > 0``, mantém apenas itens publicados
+    nos últimos ``dias`` dias (itens sem data são preservados), o que foca a
+    captação em notícias recentes e reduz o texto enviado à IA (menos tokens).
     """
-    if not url:
+    if not url and not feed_url:
         return ""
     limite = None
     if dias and dias > 0:
         limite = datetime.now(timezone.utc) - timedelta(days=dias)
-    # 1) Tenta feeds RSS/Atom.
+    # 1) Tenta o RSS cadastrado primeiro, depois candidatos derivados da URL.
+    candidatos = ([feed_url] if feed_url else []) + (_candidatos_feed(url) if url else [])
     vistos = set()
-    for cand in _candidatos_feed(url):
+    for cand in candidatos:
         if cand in vistos:
             continue
         vistos.add(cand)

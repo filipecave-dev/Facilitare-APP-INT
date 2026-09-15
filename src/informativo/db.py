@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS fontes (
     categoria     TEXT,
     regiao        TEXT,
     idioma        TEXT,
+    rss           TEXT,
     relevancia    INTEGER NOT NULL DEFAULT 3,
     prioridade    INTEGER NOT NULL DEFAULT 3,
     empresa_id    INTEGER,
@@ -247,3 +248,4 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")
     _garantir_coluna(db, "usuarios", "empresa_id", "INTEGER")
     _garantir_coluna(db, "fontes", "empresa_id", "INTEGER")
+    _garantir_coluna(db, "fontes", "rss", "TEXT")
