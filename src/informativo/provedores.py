@@ -304,9 +304,12 @@ class ProvedorRepository:
         Casa pelo host do Google (generativelanguage) e por modelos antigos
         conhecidos. Idempotente. Devolve quantas conexões foram atualizadas.
         """
+        # Padrões passados como parâmetros (?): no PostgreSQL o '%' literal em
+        # SQL é lido como marcador pelo psycopg2 — parametrizar evita isso.
         rows = self.db.query_all(
             "SELECT id, base_url, modelo FROM provedores_ia "
-            "WHERE base_url LIKE '%generativelanguage%' OR LOWER(modelo) LIKE 'gemini%'"
+            "WHERE base_url LIKE ? OR LOWER(modelo) LIKE ?",
+            ("%generativelanguage%", "gemini%"),
         )
         n = 0
         for r in rows:
