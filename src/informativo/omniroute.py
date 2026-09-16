@@ -191,6 +191,36 @@ class CaptacaoRepository:
         )
         self.db.commit()
 
+    def definir_empresa(self, captacao_id: int, empresa_id) -> None:
+        """Define a empresa-destino da captação (para qual cliente vai o
+        informativo). ``None`` volta para global/sem empresa."""
+        self.db.execute(
+            "UPDATE captacoes SET empresa_id = ? WHERE id = ?",
+            (empresa_id, captacao_id),
+        )
+        self.db.commit()
+
+    def atribuir_empresa_em_massa(self, empresa_id, *, status=None,
+                                  apenas_sem_empresa: bool = True) -> int:
+        """Atribui várias captações a uma empresa. Por padrão só as que ainda
+        não têm empresa (``empresa_id IS NULL``). Devolve quantas mudaram."""
+        clausulas, params = [], [empresa_id]
+        if apenas_sem_empresa:
+            clausulas.append("empresa_id IS NULL")
+        if status:
+            clausulas.append("status = ?")
+            params.append(status)
+        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        n = int(self.db.scalar(
+            "SELECT COUNT(*) FROM captacoes" + where,
+            params[1:] if params[1:] else [],
+        ) or 0)
+        self.db.execute(
+            "UPDATE captacoes SET empresa_id = ?" + where, params
+        )
+        self.db.commit()
+        return n
+
     def definir_frente(self, captacao_id: int, frente) -> None:
         """Reclassifica a captação em uma das frentes (ou limpa com None)."""
         if frente not in (None, "") and frente not in self.FRENTES:

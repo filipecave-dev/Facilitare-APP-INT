@@ -160,6 +160,19 @@ class EmpresaRepository:
         assert empresa is not None
         return empresa
 
+    def obter_por_nome(self, nome: str) -> Optional[Empresa]:
+        row = self.db.query_one(
+            "SELECT * FROM empresas WHERE LOWER(nome) = LOWER(?)", ((nome or "").strip(),)
+        )
+        return _row_para_empresa(row) if row else None
+
+    def obter_ou_criar(self, nome: str, **kwargs) -> Empresa:
+        """Devolve a empresa pelo nome, criando-a se ainda não existir."""
+        existente = self.obter_por_nome(nome)
+        if existente is not None:
+            return existente
+        return self.criar(nome, **kwargs)
+
     def atualizar(self, empresa_id: int, **campos) -> None:
         permitidos = {
             "nome", "nome_solucao", "assunto_email",

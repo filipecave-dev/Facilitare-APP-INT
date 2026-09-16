@@ -53,6 +53,26 @@ def test_fluxo_login_e_dashboard(client):
     assert b"Painel Principal" in resp.data
 
 
+def test_bootstrap_move_conteudo_atual_para_tivolitur(tmp_path):
+    from informativo.empresas import EmpresaRepository
+    from informativo.fontes import FonteRepository
+    from informativo.omniroute import CaptacaoRepository
+
+    dsn = f"sqlite:///{tmp_path}/tivo.db"
+    # DB antigo com uma captação SEM empresa (conteúdo atual da plataforma).
+    with Database(dsn) as db:
+        init_db(db)
+        f = FonteRepository(db).criar("Reuters", "reuters.com")
+        CaptacaoRepository(db).registrar(f, "Conteúdo atual da plataforma.")
+    # Ao subir o app, a empresa Tivolitur é criada e recebe o conteúdo atual.
+    create_app(dsn=dsn)
+    with Database(dsn) as db:
+        tivo = EmpresaRepository(db).obter_por_nome("Tivolitur")
+        assert tivo is not None
+        cap = CaptacaoRepository(db).listar_recentes()[0]
+        assert cap["empresa_id"] == tivo.id
+
+
 def test_pagina_fontes_lista_seed(client):
     _login(client)
     resp = client.get("/fontes")

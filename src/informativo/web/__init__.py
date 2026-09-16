@@ -81,6 +81,16 @@ def create_app(dsn: Optional[str] = None) -> Flask:
 
             ProvedorRepository(db).normalizar_modelo_gemini()
             sett.set("gemini_25_flash_lite", "1")
+        # Ajuste único: garante a empresa "Tivolitur" e move o conteúdo atual
+        # (captações ainda sem empresa) para ela.
+        if sett.get("conteudo_atual_tivolitur") != "1":
+            from ..omniroute import CaptacaoRepository
+
+            emp = EmpresaRepository(db).obter_ou_criar(
+                "Tivolitur", nome_solucao="Tivolitur"
+            )
+            CaptacaoRepository(db).atribuir_empresa_em_massa(emp.id)
+            sett.set("conteudo_atual_tivolitur", "1")
 
     _registrar(app)
     return app
@@ -720,7 +730,7 @@ def _registrar(app: Flask) -> None:
             contagem=repo_cap.contar_por_status(empresa_id=emp, somente_empresa=somente),
             status_atual=status,
             provedores=provedores,
-            empresas=EmpresaRepository(_db()).listar(),
+            empresas=EmpresaRepository(_db()).listar() if _is_plataforma(principal) else [],
             regioes=repo_fontes.regioes(),
             total_ativas=repo_fontes.resumo()["ativas"],
             frentes=CaptacaoRepository.FRENTES,
@@ -869,6 +879,52 @@ def _registrar(app: Flask) -> None:
         except ValueError as exc:
             flash(str(exc), "erro")
         return redirect(request.referrer or url_for("captacao", status="aprovada"))
+
+    @app.route("/captacao/<int:cid>/empresa", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_empresa(cid: int):
+        """Define a empresa-destino do informativo (só a plataforma escolhe)."""
+        from ..omniroute import CaptacaoRepository
+
+        principal = _principal()
+        if not _is_plataforma(principal):
+            abort(403)  # empresa não reatribui suas captações
+        repo = CaptacaoRepository(_db())
+        if repo.get(cid) is None:
+            abort(404)
+        eid = request.form.get("empresa_id") or None
+        empresa_id = int(eid) if eid else None
+        repo.definir_empresa(cid, empresa_id)
+        if empresa_id:
+            emp = EmpresaRepository(_db()).get(empresa_id)
+            flash(f"Encaminhado para '{emp.nome if emp else empresa_id}'.", "ok")
+        else:
+            flash("Empresa-destino removida (voltou para global).", "ok")
+        return redirect(request.referrer or url_for("captacao"))
+
+    @app.route("/captacao/atribuir", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def captacao_atribuir():
+        """Atribui em massa as captações do status atual a uma empresa."""
+        from ..omniroute import CaptacaoRepository
+
+        principal = _principal()
+        if not _is_plataforma(principal):
+            abort(403)
+        eid = request.form.get("empresa_id") or None
+        if not eid:
+            flash("Selecione a empresa-destino.", "erro")
+            return redirect(url_for("captacao"))
+        status = request.form.get("status") or None
+        if status and status not in CaptacaoRepository.STATUS:
+            status = None
+        todas = request.form.get("todas") == "1"
+        n = CaptacaoRepository(_db()).atribuir_empresa_em_massa(
+            int(eid), status=status, apenas_sem_empresa=not todas
+        )
+        emp = EmpresaRepository(_db()).get(int(eid))
+        flash(f"{n} captação(ões) encaminhada(s) para '{emp.nome if emp else eid}'.", "ok")
+        return redirect(url_for("captacao", status=status or "pendente"))
 
     @app.route("/captacao/<int:cid>/parafrasear", methods=["POST"])
     @perfil_obrigatorio("Administrador", "Editor")

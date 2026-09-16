@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Captação — Informativo{% endblock %}
 {% set pode_rodar = principal.perfil in ('Administrador', 'Editor') %}
+{% set plat = principal.empresa_id is none %}
+{% set empresas_map = {} %}
+{% for e in empresas %}{% set _ = empresas_map.update({e.id: e.nome}) %}{% endfor %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -76,6 +79,22 @@
     </div>
   </div>
 
+  {% if plat and pode_rodar and empresas %}
+  <div class="card note" style="background:#f3f7ff;margin-bottom:12px">
+    <form method="post" action="{{ url_for('captacao_atribuir') }}" class="form-actions" style="align-items:flex-end">
+      <input type="hidden" name="status" value="{{ status_atual }}">
+      <label style="max-width:280px;margin:0">Encaminhar “{{ status_atual }}” para a empresa
+        <select name="empresa_id" required>
+          <option value="">— escolha a empresa —</option>
+          {% for e in empresas %}<option value="{{ e.id }}">{{ e.nome }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="check" style="margin:0"><input type="checkbox" name="todas" value="1"> incluir as que já têm empresa</label>
+      <button type="submit" class="btn btn-sm btn-primary">Atribuir empresa</button>
+    </form>
+  </div>
+  {% endif %}
+
   {% if captacoes %}
     {% for c in captacoes %}
     <div class="card note" style="margin-bottom:12px">
@@ -89,7 +108,19 @@
       <div class="muted" style="font-size:13px;margin-bottom:6px">
         {{ c.categoria or '—' }}{% if c.regiao %} · {{ c.regiao }}{% endif %}
         {% if c.frente %}· <span class="pill on">{{ c.frente }}</span>{% endif %}
+        · {% if c.empresa_id %}<span class="pill">→ {{ empresas_map.get(c.empresa_id, 'Empresa') }}</span>{% else %}<span class="pill off">sem empresa</span>{% endif %}
       </div>
+      {% if plat and pode_rodar and empresas %}
+      <form class="inline-form" method="post" action="{{ url_for('captacao_empresa', cid=c.id) }}" style="margin-bottom:8px">
+        <label class="muted" style="font-size:12px">Empresa destino
+          <select name="empresa_id" onchange="this.form.submit()">
+            <option value="" {{ 'selected' if not c.empresa_id }}>— global (sem empresa) —</option>
+            {% for e in empresas %}<option value="{{ e.id }}" {{ 'selected' if c.empresa_id == e.id }}>{{ e.nome }}</option>{% endfor %}
+          </select>
+        </label>
+        <noscript><button class="btn btn-sm">Aplicar</button></noscript>
+      </form>
+      {% endif %}
       <div style="white-space:pre-wrap;margin-bottom:10px">{{ c.conteudo }}</div>
       {% if c.parafrase %}
       <div class="card note" style="background:#eef6ff;margin-bottom:10px">

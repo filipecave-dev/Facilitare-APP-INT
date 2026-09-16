@@ -168,6 +168,29 @@ def test_captacao_ordena_por_prioridade(db):
     assert "Terremoto" in recentes[0]["conteudo"]  # prioridade alta primeiro
 
 
+def test_atribuir_empresa_captacao(db):
+    from informativo.empresas import EmpresaRepository
+
+    er = EmpresaRepository(db)
+    tivo = er.criar("Tivolitur", nome_solucao="Tivolitur")
+    outra = er.criar("Outra", nome_solucao="Outra")
+    f = FonteRepository(db).criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    a = cap.registrar(f, "Notícia um sobre aviação em SP.")
+    b = cap.registrar(f, "Notícia dois totalmente diferente aqui.")
+    # por item
+    cap.definir_empresa(a, tivo.id)
+    assert cap.get(a)["empresa_id"] == tivo.id
+    # em massa: só as sem empresa vão para Tivolitur (a já tem)
+    n = cap.atribuir_empresa_em_massa(tivo.id)
+    assert n == 1  # apenas 'b'
+    assert cap.get(b)["empresa_id"] == tivo.id
+    # incluir as que já têm empresa: reatribui tudo para 'outra'
+    n2 = cap.atribuir_empresa_em_massa(outra.id, apenas_sem_empresa=False)
+    assert n2 == 2
+    assert cap.get(a)["empresa_id"] == outra.id and cap.get(b)["empresa_id"] == outra.id
+
+
 def test_normalizar_modelo_gemini(db):
     from informativo.provedores import ProvedorRepository
 
