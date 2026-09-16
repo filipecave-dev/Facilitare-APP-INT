@@ -290,6 +290,37 @@ class ProvedorRepository:
         )
         self.db.commit()
 
+    # Modelo recomendado para o Gemini (econômico e rápido).
+    GEMINI_MODELO_PADRAO = "gemini-2.5-flash-lite"
+    _GEMINI_LEGADOS = (
+        "gemini-flash-lite-latest", "gemini-flash-latest", "gemini-1.5-flash",
+        "gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-2.0-flash-lite",
+        "gemini-pro",
+    )
+
+    def normalizar_modelo_gemini(self) -> int:
+        """Aponta conexões Gemini legadas para ``gemini-2.5-flash-lite``.
+
+        Casa pelo host do Google (generativelanguage) e por modelos antigos
+        conhecidos. Idempotente. Devolve quantas conexões foram atualizadas.
+        """
+        rows = self.db.query_all(
+            "SELECT id, base_url, modelo FROM provedores_ia "
+            "WHERE base_url LIKE '%generativelanguage%' OR LOWER(modelo) LIKE 'gemini%'"
+        )
+        n = 0
+        for r in rows:
+            modelo = (r.get("modelo") or "").strip().lower()
+            if modelo in self._GEMINI_LEGADOS and modelo != self.GEMINI_MODELO_PADRAO:
+                self.db.execute(
+                    "UPDATE provedores_ia SET modelo = ? WHERE id = ?",
+                    (self.GEMINI_MODELO_PADRAO, r["id"]),
+                )
+                n += 1
+        if n:
+            self.db.commit()
+        return n
+
     def alternar_ativo(self, pid: int) -> None:
         self.db.execute(
             "UPDATE provedores_ia SET ativo = 1 - ativo WHERE id = ?", (pid,)

@@ -127,6 +127,65 @@ def test_limpar_captacoes_por_status(db):
     assert cap.count() == 0
 
 
+def test_prioridade_ordena_desastre_e_aviacao():
+    from informativo.priorizacao import prioridade_da_noticia
+
+    desastre = prioridade_da_noticia("Enchente e deslizamento no litoral", "Brasil")
+    greve_aero = prioridade_da_noticia("Greve de controladores fecha aeroporto de Guarulhos", "Brasil")
+    viagem = prioridade_da_noticia("Nova rota de ônibus de turismo", "Brasil")
+    neutra = prioridade_da_noticia("Balanço trimestral de uma empresa de software", "Brasil")
+    assert desastre > viagem > neutra
+    assert greve_aero > viagem
+    # Brasil dá bônus sobre o mesmo fato fora do país.
+    assert prioridade_da_noticia("aeroporto fechado", "Brasil") > \
+        prioridade_da_noticia("aeroporto fechado", "Internacional")
+
+
+def test_dedup_captacao_nao_repete(db):
+    repo_f = FonteRepository(db)
+    f = repo_f.criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    texto = "Greve de pilotos afeta voos no aeroporto de Congonhas nesta semana."
+    id1 = cap.registrar(f, texto)
+    assert id1 is not None
+    # mesmo conteúdo: ignorado (retorna None)
+    assert cap.registrar(f, texto) is None
+    # quase igual: também ignorado por similaridade
+    quase = "Greve de pilotos afeta os voos no aeroporto de Congonhas nesta semana toda."
+    assert cap.registrar(f, quase) is None
+    # conteúdo diferente entra normalmente
+    assert cap.registrar(f, "Feira de tecnologia acontece em Recife com novidades.") is not None
+    assert cap.count() == 2
+
+
+def test_captacao_ordena_por_prioridade(db):
+    repo_f = FonteRepository(db)
+    f = repo_f.criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    cap.registrar(f, "Relatório sobre mercado de cafés especiais.")  # baixa
+    cap.registrar(f, "Terremoto e tsunami atingem região costeira.", empresa_id=None)  # alta
+    recentes = cap.listar_recentes()
+    assert "Terremoto" in recentes[0]["conteudo"]  # prioridade alta primeiro
+
+
+def test_normalizar_modelo_gemini(db):
+    from informativo.provedores import ProvedorRepository
+
+    repo = ProvedorRepository(db)
+    p = repo.criar(
+        "Gemini", "openai",
+        "https://generativelanguage.googleapis.com/v1beta/openai",
+        "gemini-flash-lite-latest",
+    )
+    outro = repo.criar("DeepSeek", "openai", "https://api.deepseek.com", "deepseek-chat")
+    n = repo.normalizar_modelo_gemini()
+    assert n == 1
+    assert repo.get(p.id).modelo == "gemini-2.5-flash-lite"
+    assert repo.get(outro.id).modelo == "deepseek-chat"  # inalterado
+    # idempotente
+    assert repo.normalizar_modelo_gemini() == 0
+
+
 def test_prompt_parafrase_tem_frente_e_conteudo(db):
     cap = {
         "fonte_nome": "Reuters", "regiao": "Brasil",

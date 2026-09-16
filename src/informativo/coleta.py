@@ -120,7 +120,7 @@ def _candidatos_feed(url: str) -> list[str]:
 
 
 def coletar_conteudo(url: str, *, feed_url: str = "", timeout: int = 12,
-                     max_chars: int = 3500, dias: int = 0) -> str:
+                     max_chars: int = 2200, dias: int = 0) -> str:
     """Devolve um trecho com o conteúdo recente da fonte, ou '' se não obtiver.
 
     Se ``feed_url`` (RSS cadastrado) for informado, ele é tentado primeiro —
@@ -160,14 +160,14 @@ def coletar_conteudo(url: str, *, feed_url: str = "", timeout: int = 12,
                     dt = _parse_data(d)
                     if dt is not None and dt < limite:
                         continue  # item mais antigo que a janela
-                resumo = _strip_html(ds)[:220]
+                resumo = _strip_html(ds)[:150]
                 marca = f" ({d})" if d else ""
                 linhas.append(f"- {t}{marca}. {resumo}".strip())
             if linhas:
                 cab = "Últimas publicações da fonte"
                 if dias:
                     cab += f" (últimos {dias} dias)"
-                return (cab + ":\n" + "\n".join(linhas[:12]))[:max_chars]
+                return (cab + ":\n" + "\n".join(linhas[:8]))[:max_chars]
     # 2) Fallback: texto da própria página.
     try:
         data, _ = _baixar(url, timeout)

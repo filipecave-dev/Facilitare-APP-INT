@@ -35,7 +35,14 @@
         </datalist>
       </label>
       <label>Modelo
-        <input type="text" name="modelo" required placeholder="ex.: deepseek-chat">
+        <input type="text" name="modelo" required list="modelos-comuns"
+               placeholder="ex.: gemini-2.5-flash-lite">
+        <datalist id="modelos-comuns">
+          <option value="gemini-2.5-flash-lite">
+          <option value="deepseek-chat">
+          <option value="gpt-4o-mini">
+          <option value="claude-haiku-4-5">
+        </datalist>
       </label>
       <label>Chave de API
         <input type="password" name="api_key" placeholder="••••••••" autocomplete="off">
@@ -54,8 +61,10 @@
       <button type="submit" class="btn btn-primary">Adicionar</button>
     </div>
   </form>
-  <p class="help">Exemplos de modelo: <code>deepseek-chat</code>,
-     <code>gemini-1.5-flash</code>, <code>gpt-4o-mini</code>,
+  <p class="help">Para o <strong>Gemini</strong>, use a URL base
+     <code>https://generativelanguage.googleapis.com/v1beta/openai</code> e o
+     modelo <code>gemini-2.5-flash-lite</code> (econômico e rápido). Outros
+     exemplos: <code>deepseek-chat</code>, <code>gpt-4o-mini</code>,
      <code>claude-haiku-4-5</code>. ⚠️ Se a URL for <code>localhost</code>, só um
      app na mesma máquina a alcança; da nuvem, use uma URL pública (túnel).</p>
 </div>

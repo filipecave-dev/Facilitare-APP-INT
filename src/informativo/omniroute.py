@@ -124,19 +124,36 @@ class CaptacaoRepository:
         self.db = db
 
     def registrar(self, fonte, conteudo: str, *, provedor: str = None,
-                  empresa_id=None):
+                  empresa_id=None, evitar_repetido: bool = True):
+        """Registra uma captação, com prioridade por tema e deduplicação.
+
+        Se ``evitar_repetido`` e o conteúdo repetir uma captação recente (mesma
+        empresa) — por assinatura ou alta similaridade —, **não** insere e
+        devolve ``None``. Caso contrário devolve o ``id`` inserido.
+        """
         from datetime import datetime, timezone
 
+        from .priorizacao import assinatura, e_repetida, prioridade_da_noticia
+
+        regiao = getattr(fonte, "regiao", None)
+        if evitar_repetido:
+            recentes = self.listar_recentes(
+                120, empresa_id=empresa_id, somente_empresa=empresa_id is not None
+            )
+            if e_repetida(conteudo, recentes):
+                return None
+        prio = prioridade_da_noticia(conteudo, regiao or "")
+        assn = assinatura(conteudo)
         agora = datetime.now(timezone.utc).isoformat()
-        self.db.insert(
+        novo_id = self.db.insert(
             "INSERT INTO captacoes (fonte_id, fonte_nome, categoria, regiao, "
-            "provedor, empresa_id, conteudo, status, criado_em) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "provedor, empresa_id, conteudo, prioridade, assinatura, status, "
+            "criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (fonte.id, fonte.nome, getattr(fonte, "categoria", None),
-             getattr(fonte, "regiao", None), provedor, empresa_id,
-             conteudo, "pendente", agora),
+             regiao, provedor, empresa_id, conteudo, prio, assn, "pendente", agora),
         )
         self.db.commit()
+        return novo_id
 
     def _filtro_empresa(self, empresa_id, somente_empresa):
         """(clausula, params) para isolar por empresa. Plataforma vê tudo."""
@@ -156,9 +173,11 @@ class CaptacaoRepository:
             params += pa
         where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
         params.append(limite)
+        # Ordena por prioridade temática (desastres, greve aérea, aviação/
+        # viagens, Brasil) e, dentro do mesmo peso, pelas mais recentes.
         return self.db.query_all(
             "SELECT * FROM captacoes" + where +
-            " ORDER BY criado_em DESC, id DESC LIMIT ?", params,
+            " ORDER BY prioridade DESC, criado_em DESC, id DESC LIMIT ?", params,
         )
 
     def get(self, captacao_id: int) -> dict:

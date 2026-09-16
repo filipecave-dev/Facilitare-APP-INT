@@ -74,6 +74,13 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_rss_ativadas") != "1":
             FonteRepository(db).ativar_com_rss_global()
             sett.set("fontes_rss_ativadas", "1")
+        # Ajuste único: conexões Gemini legadas passam a usar o modelo
+        # econômico gemini-2.5-flash-lite.
+        if sett.get("gemini_25_flash_lite") != "1":
+            from ..provedores import ProvedorRepository
+
+            ProvedorRepository(db).normalizar_modelo_gemini()
+            sett.set("gemini_25_flash_lite", "1")
 
     _registrar(app)
     return app
@@ -770,7 +777,7 @@ def _registrar(app: Flask) -> None:
             dias = 5
         dias = max(1, min(30, dias))
 
-        ok = falhas = 0
+        ok = falhas = repetidas = 0
         primeiro_erro = None
         for fonte in fontes:
             conteudo = ""
@@ -782,16 +789,22 @@ def _registrar(app: Flask) -> None:
                 )
             system, prompt = prompt_para_fonte(fonte, conteudo, dias=dias)
             try:
-                texto = cli.chat(prompt, system=system)
-                repo_cap.registrar(fonte, texto, provedor=provedor.nome,
-                                   empresa_id=principal.empresa_id)
-                ok += 1
+                # Saída enxuta: economiza tokens a cada consulta.
+                texto = cli.chat(prompt, system=system, max_tokens=380)
+                novo = repo_cap.registrar(fonte, texto, provedor=provedor.nome,
+                                          empresa_id=principal.empresa_id)
+                if novo is None:
+                    repetidas += 1
+                else:
+                    ok += 1
             except IAError as exc:
                 falhas += 1
                 if primeiro_erro is None:
                     primeiro_erro = str(exc)
         if ok:
             flash(f"Captação concluída via '{provedor.nome}': {ok} fonte(s).", "ok")
+        if repetidas:
+            flash(f"{repetidas} conteúdo(s) repetido(s) foram ignorados.", "aviso")
         if falhas:
             flash(
                 f"{falhas} fonte(s) falharam. Primeiro erro: {primeiro_erro}",
@@ -922,17 +935,32 @@ def _registrar(app: Flask) -> None:
             200, status="aprovada", empresa_id=alvo_emp,
             somente_empresa=somente or empresa is not None,
         )
-        # Agrupa por frente (as sem frente vão para 'Informativo').
-        grupos = {f: [] for f in CaptacaoRepository.FRENTES}
-        for c in aprovadas:
-            fr = c.get("frente") or "Informativo"
-            grupos.setdefault(fr, []).append(c)
+        # Padrão unitário: cada notícia é um comunicado. O operador escolhe
+        # quantos comunicados por página quer preparar/disparar.
+        try:
+            por_pagina = int(request.args.get("por_pagina", 1))
+        except (TypeError, ValueError):
+            por_pagina = 1
+        por_pagina = max(1, min(20, por_pagina))
+        try:
+            pagina = int(request.args.get("pagina", 1))
+        except (TypeError, ValueError):
+            pagina = 1
+        total = len(aprovadas)
+        total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+        pagina = max(1, min(pagina, total_paginas))
+        inicio = (pagina - 1) * por_pagina
+        itens_pagina = aprovadas[inicio:inicio + por_pagina]
         familia = familia_do_modelo(empresa.fonte_modelo if empresa else None)
         return render_template(
             "informativo.html",
             empresa=empresa,
-            grupos=grupos,
-            total=len(aprovadas),
+            itens=itens_pagina,
+            total=total,
+            por_pagina=por_pagina,
+            pagina=pagina,
+            total_paginas=total_paginas,
+            inicio=inicio,
             familia_fonte=familia,
             empresas=EmpresaRepository(_db()).listar() if _is_plataforma(principal) else [],
             is_plataforma=_is_plataforma(principal),
@@ -1015,6 +1043,39 @@ def _registrar(app: Flask) -> None:
         nome = f"informativo-{base}.html"
         return Response(html, mimetype="text/html", headers={
             "Content-Disposition": f'attachment; filename="{nome}"',
+        })
+
+    def _email_html_de_item(principal, cid: int):
+        """Monta o e-mail de **um** comunicado (padrão unitário)."""
+        from ..informativo_email import montar_email_html, montar_grupos
+        from ..omniroute import CaptacaoRepository
+
+        cap = CaptacaoRepository(_db()).get(cid)
+        if cap is None:
+            abort(404)
+        if not _is_plataforma(principal) and cap.get("empresa_id") != principal.empresa_id:
+            abort(403)
+        empresa = None
+        if cap.get("empresa_id"):
+            empresa = EmpresaRepository(_db()).get(cap["empresa_id"])
+        template = None
+        if empresa and empresa.tem_template:
+            template = EmpresaRepository(_db()).obter_template(empresa.id)
+        html = montar_email_html(empresa, montar_grupos([cap]), template=template)
+        return empresa, cap, html
+
+    @app.route("/informativo/email/<int:cid>")
+    @login_obrigatorio
+    def informativo_email_item(cid: int):
+        _, _, html = _email_html_de_item(_principal(), cid)
+        return Response(html, mimetype="text/html")
+
+    @app.route("/informativo/email/<int:cid>/baixar")
+    @login_obrigatorio
+    def informativo_email_item_baixar(cid: int):
+        _, _, html = _email_html_de_item(_principal(), cid)
+        return Response(html, mimetype="text/html", headers={
+            "Content-Disposition": f'attachment; filename="comunicado-{cid}.html"',
         })
 
     # -- Empresas (clientes) — gestão global (plataforma) -------------------
