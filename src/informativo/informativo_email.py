@@ -62,9 +62,15 @@ def montar_email_html(
         if (lmime or "").startswith("image/"):
             import base64
             logo_uri = f"data:{lmime};base64,{base64.b64encode(ldados).decode('ascii')}"
+    # Logo fixo à direita da barra, proporcional ao título (altura ~2x a fonte
+    # do título de 22px). Célula à direita só existe quando há logo.
     logo_html = (
-        f'<img src="{logo_uri}" alt="logo" style="height:40px;max-width:220px;'
-        'width:auto;display:block;margin-bottom:8px;object-fit:contain;">'
+        f'<img src="{logo_uri}" alt="logo" style="height:44px;max-width:200px;'
+        'width:auto;display:block;object-fit:contain;">'
+        if logo_uri else ""
+    )
+    logo_cell = (
+        f'<td valign="middle" align="right" style="padding-left:16px;white-space:nowrap;">{logo_html}</td>'
         if logo_uri else ""
     )
 
@@ -121,10 +127,16 @@ def montar_email_html(
                   overflow:hidden;box-shadow:0 4px 18px rgba(20,30,50,.12);">
       <tr>
         <td style="background:{escape(cor)};padding:22px 28px;">
-          {logo_html}
-          <div style="color:#ffffff;font-size:22px;font-weight:700;">{escape(solucao)}</div>
-          <div style="color:rgba(255,255,255,.85);font-size:13px;margin-top:2px;">
-            {escape(assunto)} &middot; {escape(data)}</div>
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td valign="middle">
+                <div style="color:#ffffff;font-size:22px;font-weight:700;">{escape(solucao)}</div>
+                <div style="color:rgba(255,255,255,.85);font-size:13px;margin-top:2px;">
+                  {escape(assunto)} &middot; {escape(data)}</div>
+              </td>
+              {logo_cell}
+            </tr>
+          </table>
         </td>
       </tr>
       <tr>

@@ -23,8 +23,8 @@ from .db import Database
 TEMPLATE_MAX_BYTES = 2 * 1024 * 1024
 # Tamanho máximo do logo (512 KB) e dimensão recomendada de exibição.
 LOGO_MAX_BYTES = 512 * 1024
-LOGO_ALTURA_BARRA = 40   # px — altura na barra do informativo
-LOGO_LARGURA_MAX = 220   # px — largura máxima recomendada
+LOGO_ALTURA_BARRA = 44   # px — altura na barra do informativo (fixo à direita)
+LOGO_LARGURA_MAX = 200   # px — largura máxima recomendada
 
 # 4 modelos de fonte (tipografia) comuns em informativos corporativos.
 # Cada modelo é uma pilha ``font-family`` pronta para uso no informativo/e-mail.

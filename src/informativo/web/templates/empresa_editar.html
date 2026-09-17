@@ -101,22 +101,21 @@
 
 <div class="card">
   <h2>Logo da empresa</h2>
-  <p class="help">Aparece na <strong>barra superior do informativo</strong>. O sistema
-     ajusta automaticamente para caber na barra (altura de <strong>{{ logo_altura }} px</strong>,
-     largura proporcional). Recomendado: PNG com <strong>fundo transparente</strong>,
+  <p class="help">Aparece <strong>fixo à direita</strong> da barra superior do informativo,
+     alinhado e <strong>proporcional ao título</strong>. O sistema ajusta automaticamente
+     para caber na barra (altura de <strong>{{ logo_altura }} px</strong>, largura proporcional
+     até {{ logo_largura_max }} px). Recomendado: PNG com <strong>fundo transparente</strong>,
      em torno de <strong>{{ logo_largura_max }}×{{ logo_altura }} px</strong> (2× para telas retina).
      Formatos: PNG, JPG, SVG ou WEBP. Tamanho máximo: <strong>512 KB</strong>.</p>
   {% if empresa.tem_logo %}
-  <div class="card note" style="margin:0 0 12px;background:#f6f8fc">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-      <span class="muted">Prévia na barra:</span>
-      <span style="display:inline-flex;align-items:center;height:{{ logo_altura + 16 }}px;padding:0 12px;background:{{ empresa.tema_primary or '#2557d6' }};border-radius:8px">
-        <img src="{{ url_for('empresa_logo_arquivo', empresa_id=empresa.id) }}" alt="logo"
-             style="height:{{ logo_altura }}px;max-width:{{ logo_largura_max }}px;width:auto;object-fit:contain;display:block">
-      </span>
-      <span class="muted" style="font-size:12px">{{ empresa.logo_nome }} · {{ empresa.logo_mime }}</span>
-    </div>
+  <p class="muted" style="margin:0 0 6px">Prévia na barra do informativo (logo fixo à direita):</p>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;
+       background:{{ empresa.tema_primary or '#2557d6' }};border-radius:8px;padding:14px 18px;margin:0 0 8px">
+    <span style="color:#fff;font-size:22px;font-weight:700;line-height:1.1">{{ empresa.nome_solucao }}</span>
+    <img src="{{ url_for('empresa_logo_arquivo', empresa_id=empresa.id) }}" alt="logo"
+         style="height:44px;max-width:{{ logo_largura_max }}px;width:auto;object-fit:contain;display:block;flex:0 0 auto">
   </div>
+  <p class="muted" style="font-size:12px;margin:0 0 12px">{{ empresa.logo_nome }} · {{ empresa.logo_mime }}</p>
   {% else %}
   <p class="muted">Nenhum logo enviado ainda.</p>
   {% endif %}

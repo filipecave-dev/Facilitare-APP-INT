@@ -3,10 +3,14 @@
 {% set pode_rodar = principal.perfil in ('Administrador', 'Editor') %}
 {% macro link_pagina(p) %}{{ url_for('informativo', empresa_id=empresa.id if empresa else None, por_pagina=por_pagina, pagina=p) }}{% endmacro %}
 {% block content %}
-{% if empresa and empresa.tem_logo %}
-<div class="card" style="background:{{ empresa.tema_primary or '#2557d6' }};padding:14px 18px">
+{% if empresa %}
+<div class="card" style="background:{{ empresa.tema_primary or '#2557d6' }};padding:14px 20px;
+     display:flex;align-items:center;justify-content:space-between;gap:16px">
+  <span style="color:#fff;font-size:22px;font-weight:700;line-height:1.1">{{ empresa.nome_solucao }}</span>
+  {% if empresa.tem_logo %}
   <img src="{{ url_for('empresa_logo_arquivo', empresa_id=empresa.id) }}" alt="logo"
-       style="height:40px;max-width:220px;width:auto;object-fit:contain;display:block">
+       style="height:44px;max-width:200px;width:auto;object-fit:contain;display:block;flex:0 0 auto">
+  {% endif %}
 </div>
 {% endif %}
 <div class="page-head">
