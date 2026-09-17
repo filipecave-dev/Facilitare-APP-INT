@@ -21,6 +21,25 @@
   <div class="card stat"><span class="num">{{ contagem.descartada }}</span><span class="lbl">Descartadas</span></div>
 </div>
 
+{% if uso_hoje %}
+<div class="card note" style="{{ 'background:#ffecec' if uso_hoje.atingido else 'background:#eef6ff' }}">
+  <div class="page-head" style="margin:0">
+    <div>
+      <strong>Uso de IA hoje:</strong>
+      {{ uso_hoje.chamadas }} chamada(s) ·
+      {{ '{:,}'.format(uso_hoje.tokens_in + uso_hoje.tokens_out).replace(',', '.') }} tokens ·
+      <strong>{{ uso_hoje.moeda }} {{ '%.4f'|format(uso_hoje.custo) }}</strong>
+      {% if uso_hoje.limite and uso_hoje.limite > 0 %}
+        de {{ uso_hoje.moeda }} {{ '%.2f'|format(uso_hoje.limite) }}
+        {% if uso_hoje.atingido %}<span class="pill off">limite atingido</span>
+        {% else %}<span class="muted">(resta {{ uso_hoje.moeda }} {{ '%.4f'|format(uso_hoje.resta) }})</span>{% endif %}
+      {% else %}<span class="muted">(sem limite diário)</span>{% endif %}
+    </div>
+    {% if plat %}<a class="btn btn-sm" href="{{ url_for('settings') }}">Ajustar orçamento</a>{% endif %}
+  </div>
+</div>
+{% endif %}
+
 {% if pode_rodar %}
 <div class="card">
   <h2>Rodar captação</h2>

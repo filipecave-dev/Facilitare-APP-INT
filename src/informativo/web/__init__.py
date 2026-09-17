@@ -528,11 +528,20 @@ def _registrar(app: Flask) -> None:
     @app.route("/settings", methods=["GET", "POST"])
     @plataforma_obrigatoria
     def settings():
+        from ..uso import (
+            CFG_LIMITE_DIA, CFG_MOEDA, CFG_PRECO_IN, CFG_PRECO_OUT, Precos,
+        )
+
         repo = SettingsRepository(_db())
         if request.method == "POST":
             cor = normalizar_cor(request.form.get("tema_primary", TEMA_PADRAO))
             repo.set(CHAVE_TEMA, cor)
             repo.set("api_email", request.form.get("api_email", "").strip())
+            # Orçamento de IA (preços por 1M tokens, moeda e teto diário).
+            repo.set(CFG_PRECO_IN, (request.form.get("ia_preco_in", "") or "0").strip())
+            repo.set(CFG_PRECO_OUT, (request.form.get("ia_preco_out", "") or "0").strip())
+            repo.set(CFG_MOEDA, (request.form.get("ia_moeda", "") or "US$").strip())
+            repo.set(CFG_LIMITE_DIA, (request.form.get("ia_limite_diario", "") or "0").strip())
             flash("Configurações salvas.", "ok")
             return redirect(url_for("settings"))
         return render_template(
@@ -540,6 +549,7 @@ def _registrar(app: Flask) -> None:
             presets=PRESETS,
             cor_atual=repo.get(CHAVE_TEMA, TEMA_PADRAO),
             api_email=repo.get("api_email", ""),
+            precos=Precos(repo),
         )
 
     # -- Provedores de IA (conexões: OmniRoute/GPT/DeepSeek/Gemini/Claude) --
@@ -710,6 +720,7 @@ def _registrar(app: Flask) -> None:
     def captacao():
         from ..omniroute import CaptacaoRepository
         from ..provedores import ProvedorRepository
+        from ..uso import Precos, UsoRepository
 
         principal = _principal()
         status = request.args.get("status") or "pendente"
@@ -734,6 +745,9 @@ def _registrar(app: Flask) -> None:
             regioes=repo_fontes.regioes(),
             total_ativas=repo_fontes.resumo()["ativas"],
             frentes=CaptacaoRepository.FRENTES,
+            uso_hoje=UsoRepository(_db()).resumo_do_dia(
+                Precos(SettingsRepository(_db())),
+                empresa_id=emp, somente_empresa=somente),
         )
 
     @app.route("/captacao/rodar", methods=["POST"])
@@ -741,6 +755,7 @@ def _registrar(app: Flask) -> None:
     def captacao_rodar():
         from ..omniroute import CaptacaoRepository, prompt_para_fonte
         from ..provedores import IAError, ProvedorRepository
+        from ..uso import Precos, UsoRepository, excede_limite
 
         try:
             quantidade = int(request.form.get("quantidade", 5))
@@ -787,9 +802,24 @@ def _registrar(app: Flask) -> None:
             dias = 5
         dias = max(1, min(30, dias))
 
+        # Teto diário de custo: trava a operação para não estourar o orçamento.
+        precos = Precos(SettingsRepository(_db()))
+        uso_repo = UsoRepository(_db())
+        somente = not _is_plataforma(principal)
+        if excede_limite(uso_repo, precos, empresa_id=principal.empresa_id,
+                         somente_empresa=somente):
+            flash(f"Limite diário de custo atingido ({precos.moeda} "
+                  f"{precos.limite_diario:.2f}). Ajuste em Configurações.", "erro")
+            return redirect(url_for("captacao"))
+
         ok = falhas = repetidas = 0
+        limitado = False
         primeiro_erro = None
         for fonte in fontes:
+            if excede_limite(uso_repo, precos, empresa_id=principal.empresa_id,
+                             somente_empresa=somente):
+                limitado = True
+                break
             conteudo = ""
             if buscar_conteudo:
                 from ..coleta import coletar_conteudo
@@ -800,7 +830,10 @@ def _registrar(app: Flask) -> None:
             system, prompt = prompt_para_fonte(fonte, conteudo, dias=dias)
             try:
                 # Saída enxuta: economiza tokens a cada consulta.
-                texto = cli.chat(prompt, system=system, max_tokens=380)
+                texto, uso = cli.chat_uso(prompt, system=system, max_tokens=380)
+                custo = precos.custo(uso["in"], uso["out"])
+                uso_repo.registrar("captura", uso, custo,
+                                   empresa_id=principal.empresa_id, provedor=provedor.nome)
                 novo = repo_cap.registrar(fonte, texto, provedor=provedor.nome,
                                           empresa_id=principal.empresa_id)
                 if novo is None:
@@ -813,6 +846,9 @@ def _registrar(app: Flask) -> None:
                     primeiro_erro = str(exc)
         if ok:
             flash(f"Captação concluída via '{provedor.nome}': {ok} fonte(s).", "ok")
+        if limitado:
+            flash(f"Limite diário atingido ({precos.moeda} {precos.limite_diario:.2f}) "
+                  "— captação interrompida. Ajuste em Configurações.", "aviso")
         if repetidas:
             flash(f"{repetidas} conteúdo(s) repetido(s) foram ignorados.", "aviso")
         if falhas:
@@ -932,6 +968,7 @@ def _registrar(app: Flask) -> None:
         """Gera a paráfrase do item via IA conectada, para o informativo."""
         from ..omniroute import CaptacaoRepository, prompt_parafrase
         from ..provedores import IAError
+        from ..uso import Precos, UsoRepository, excede_limite
 
         repo = CaptacaoRepository(_db())
         cap = repo.get(cid)
@@ -944,13 +981,23 @@ def _registrar(app: Flask) -> None:
         if provedor is None:
             flash("Selecione um provedor de IA ativo para gerar a paráfrase.", "erro")
             return redirect(request.referrer or url_for("captacao", status="aprovada"))
+        precos = Precos(SettingsRepository(_db()))
+        uso_repo = UsoRepository(_db())
+        somente = not _is_plataforma(principal)
+        if excede_limite(uso_repo, precos, empresa_id=principal.empresa_id,
+                         somente_empresa=somente):
+            flash(f"Limite diário atingido ({precos.moeda} {precos.limite_diario:.2f}). "
+                  "Ajuste em Configurações.", "erro")
+            return redirect(request.referrer or url_for("captacao", status="aprovada"))
         nome_solucao = ""
         if cap.get("empresa_id"):
             emp = EmpresaRepository(_db()).get(cap["empresa_id"])
             nome_solucao = emp.nome_solucao if emp else ""
         system, prompt = prompt_parafrase(cap, nome_solucao=nome_solucao)
         try:
-            texto = provedor.cliente().chat(prompt, system=system)
+            texto, uso = provedor.cliente().chat_uso(prompt, system=system)
+            uso_repo.registrar("parafrase", uso, precos.custo(uso["in"], uso["out"]),
+                               empresa_id=cap.get("empresa_id"), provedor=provedor.nome)
             repo.definir_parafrase(cid, texto)
             flash(f"Paráfrase gerada via '{provedor.nome}'.", "ok")
         except IAError as exc:
@@ -1029,6 +1076,7 @@ def _registrar(app: Flask) -> None:
         from ..empresas import familia_do_modelo  # noqa: F401
         from ..omniroute import CaptacaoRepository, prompt_parafrase
         from ..provedores import IAError
+        from ..uso import Precos, UsoRepository, excede_limite
 
         principal = _principal()
         somente = not _is_plataforma(principal)
@@ -1038,6 +1086,13 @@ def _registrar(app: Flask) -> None:
         if provedor is None:
             flash("Selecione um provedor de IA ativo para gerar as paráfrases.", "erro")
             return redirect(url_for("informativo", empresa_id=alvo_emp))
+        precos = Precos(SettingsRepository(_db()))
+        uso_repo = UsoRepository(_db())
+        if excede_limite(uso_repo, precos, empresa_id=principal.empresa_id,
+                         somente_empresa=somente):
+            flash(f"Limite diário atingido ({precos.moeda} {precos.limite_diario:.2f}). "
+                  "Ajuste em Configurações.", "erro")
+            return redirect(url_for("informativo", empresa_id=alvo_emp))
         repo = CaptacaoRepository(_db())
         aprovadas = repo.listar_recentes(
             200, status="aprovada", empresa_id=alvo_emp,
@@ -1046,22 +1101,33 @@ def _registrar(app: Flask) -> None:
         cli = provedor.cliente()
         nome_solucao = empresa.nome_solucao if empresa else ""
         ok = falhas = 0
+        limitado = False
         erro = None
         for c in aprovadas:
             if (c.get("parafrase") or "").strip():
                 continue  # já parafraseado
+            if excede_limite(uso_repo, precos, empresa_id=principal.empresa_id,
+                             somente_empresa=somente):
+                limitado = True
+                break
             system, prompt = prompt_parafrase(c, nome_solucao=nome_solucao)
             try:
-                repo.definir_parafrase(c["id"], cli.chat(prompt, system=system))
+                texto, uso = cli.chat_uso(prompt, system=system)
+                uso_repo.registrar("parafrase", uso, precos.custo(uso["in"], uso["out"]),
+                                   empresa_id=c.get("empresa_id"), provedor=provedor.nome)
+                repo.definir_parafrase(c["id"], texto)
                 ok += 1
             except IAError as exc:
                 falhas += 1
                 erro = erro or str(exc)
         if ok:
             flash(f"{ok} paráfrase(s) gerada(s) via '{provedor.nome}'.", "ok")
+        if limitado:
+            flash(f"Limite diário atingido ({precos.moeda} {precos.limite_diario:.2f}) "
+                  "— geração interrompida.", "aviso")
         if falhas:
             flash(f"{falhas} falharam. Primeiro erro: {erro}", "erro" if not ok else "aviso")
-        if not ok and not falhas:
+        if not ok and not falhas and not limitado:
             flash("Nada a parafrasear: todos os aprovados já têm texto.", "aviso")
         return redirect(url_for("informativo", empresa_id=alvo_emp))
 

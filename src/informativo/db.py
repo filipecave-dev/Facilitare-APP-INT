@@ -110,6 +110,18 @@ CREATE TABLE IF NOT EXISTS configuracoes (
     chave TEXT PRIMARY KEY,
     valor TEXT
 );
+
+CREATE TABLE IF NOT EXISTS uso_ia (
+    id         {pk},
+    dia        TEXT,
+    empresa_id INTEGER,
+    provedor   TEXT,
+    operacao   TEXT,
+    tokens_in  INTEGER NOT NULL DEFAULT 0,
+    tokens_out INTEGER NOT NULL DEFAULT 0,
+    custo      REAL    NOT NULL DEFAULT 0,
+    criado_em  TEXT
+);
 """
 
 SCHEMA_SQLITE = _TABELAS.format(pk="INTEGER PRIMARY KEY AUTOINCREMENT")

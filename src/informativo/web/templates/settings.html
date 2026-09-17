@@ -43,6 +43,32 @@
     </div>
   </div>
 
+  <div class="card">
+    <h2>Orçamento de IA (custo e teto diário)</h2>
+    <p class="help">Preços por <strong>1 milhão de tokens</strong> do provedor
+       (confira a tarifa vigente). O <strong>limite diário</strong> trava a
+       captação e a paráfrase ao ser atingido — use <code>0</code> para não
+       limitar. Padrões pensados para o Gemini 2.5 Flash-Lite.</p>
+    <div class="grid">
+      <label>Moeda
+        <input type="text" name="ia_moeda" value="{{ precos.moeda }}" placeholder="US$" maxlength="6">
+      </label>
+      <label>Preço entrada (por 1M tokens)
+        <input type="text" name="ia_preco_in" value="{{ '%.4f'|format(precos.preco_in) }}" placeholder="0.10">
+      </label>
+      <label>Preço saída (por 1M tokens)
+        <input type="text" name="ia_preco_out" value="{{ '%.4f'|format(precos.preco_out) }}" placeholder="0.40">
+      </label>
+      <label>Limite diário ({{ precos.moeda }})
+        <input type="text" name="ia_limite_diario" value="{{ '%.2f'|format(precos.limite_diario) }}" placeholder="1.00">
+      </label>
+    </div>
+    <p class="help">Estimativa atual: um ciclo de 15 notícias (captura +
+       paráfrase) custa da ordem de
+       <strong>{{ precos.moeda }} {{ '%.4f'|format(precos.custo(16000, 9000)) }}</strong>
+       no total (~25 mil tokens).</p>
+  </div>
+
   {% if principal.perfil == 'Administrador' %}
   <div class="card note">
     <p>🤖 As conexões de IA (OmniRoute, GPT, DeepSeek, Gemini, Claude) para a

@@ -246,10 +246,10 @@ def test_cadastrar_provedor_e_rodar_captacao(client, app, monkeypatch):
     with Database(app.config["DSN"]) as db:
         pid = ProvedorRepository(db).listar()[0].id
         FonteRepository(db).definir_ativa_em_massa(True)
-    # mocka a chamada ao modelo
+    # mocka a chamada ao modelo (retorna texto + uso de tokens)
     monkeypatch.setattr(
-        "informativo.provedores.ClienteIA.chat",
-        lambda self, prompt, **kw: "Resumo simulado da fonte.",
+        "informativo.provedores.ClienteIA.chat_uso",
+        lambda self, prompt, **kw: ("Resumo simulado da fonte.", {"in": 120, "out": 40}),
     )
     resp = client.post(
         "/captacao/rodar",

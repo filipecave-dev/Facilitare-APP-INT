@@ -101,13 +101,37 @@ class ClienteIA:
         temperature: float = 0.3,
         max_tokens: int = 600,
     ) -> str:
+        texto, _ = self.chat_uso(
+            prompt, system=system, temperature=temperature, max_tokens=max_tokens
+        )
+        return texto
+
+    def chat_uso(
+        self,
+        prompt: str,
+        *,
+        system: Optional[str] = None,
+        temperature: float = 0.3,
+        max_tokens: int = 600,
+    ) -> tuple[str, dict]:
+        """Como :meth:`chat`, mas devolve também o uso de tokens.
+
+        Retorna ``(texto, {"in": tokens_entrada, "out": tokens_saida})``. Usa o
+        ``usage`` que a API devolve; se ausente, estima por caracteres (~4/tok).
+        """
         if not self.base_url:
             raise IAError("URL base do provedor não configurada.")
         if not self.modelo:
             raise IAError("Modelo do provedor não configurado.")
         if self.formato == "anthropic":
-            return self._chat_anthropic(prompt, system, temperature, max_tokens)
-        return self._chat_openai(prompt, system, temperature, max_tokens)
+            texto, uso = self._chat_anthropic(prompt, system, temperature, max_tokens)
+        else:
+            texto, uso = self._chat_openai(prompt, system, temperature, max_tokens)
+        if not uso.get("in") and not uso.get("out"):
+            # Estimativa de fallback quando a API não informa 'usage'.
+            entrada = len(system or "") + len(prompt)
+            uso = {"in": round(entrada / 4), "out": round(len(texto) / 4)}
+        return texto, uso
 
     def _endpoint_openai(self) -> str:
         base = self.base_url
@@ -136,9 +160,13 @@ class ClienteIA:
             "max_tokens": max_tokens,
         })
         try:
-            return dados["choices"][0]["message"]["content"].strip()
+            texto = dados["choices"][0]["message"]["content"].strip()
         except (KeyError, IndexError, TypeError):
             raise IAError("Resposta inesperada: " + json.dumps(dados)[:300])
+        u = dados.get("usage") or {}
+        uso = {"in": int(u.get("prompt_tokens") or 0),
+               "out": int(u.get("completion_tokens") or 0)}
+        return texto, uso
 
     def _endpoint_anthropic(self) -> str:
         base = self.base_url or "https://api.anthropic.com"
@@ -162,9 +190,13 @@ class ClienteIA:
         dados = self._post(self._endpoint_anthropic(), headers, corpo)
         try:
             partes = [b.get("text", "") for b in dados["content"] if b.get("type") == "text"]
-            return "".join(partes).strip() or json.dumps(dados)[:300]
+            texto = "".join(partes).strip() or json.dumps(dados)[:300]
         except (KeyError, TypeError):
             raise IAError("Resposta inesperada: " + json.dumps(dados)[:300])
+        u = dados.get("usage") or {}
+        uso = {"in": int(u.get("input_tokens") or 0),
+               "out": int(u.get("output_tokens") or 0)}
+        return texto, uso
 
 
 # ---------------------------------------------------------------------------
