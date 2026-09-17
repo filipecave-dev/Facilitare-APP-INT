@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Configurações — Informativo{% endblock %}
+{% set perfil = principal.perfil %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Configurações</h1>
+    <p class="muted">Administração do sistema reunida em um só lugar.</p>
+  </div>
+</div>
+
+<div class="cards">
+  {# Fontes — visível a todos (gestão para Admin/Editor) #}
+  <a class="card hub" href="{{ url_for('fontes') }}">
+    <span class="hub-ic">📰</span>
+    <span class="hub-tt">Fontes</span>
+    <span class="muted">Catálogo de onde o sistema capta as notícias.</span>
+  </a>
+
+  {% if perfil in ('Administrador', 'Editor') %}
+  <a class="card hub" href="{{ url_for('provedores') }}">
+    <span class="hub-ic">🤖</span>
+    <span class="hub-tt">Provedores de IA</span>
+    <span class="muted">Conexões (Gemini, GPT, DeepSeek, Claude) e chaves.</span>
+  </a>
+  <a class="card hub" href="{{ url_for('auditoria') }}">
+    <span class="hub-ic">📊</span>
+    <span class="hub-tt">Auditoria</span>
+    <span class="muted">Consumo de tokens e custo de IA por dia.</span>
+  </a>
+  {% endif %}
+
+  {% if is_plataforma and perfil == 'Administrador' %}
+  <a class="card hub" href="{{ url_for('empresas') }}">
+    <span class="hub-ic">🏢</span>
+    <span class="hub-tt">Empresas</span>
+    <span class="muted">Clientes, template do informativo e modelo de fonte.</span>
+  </a>
+  {% elif perfil == 'Administrador' %}
+  <a class="card hub" href="{{ url_for('empresa_editar', empresa_id=minha_empresa) }}">
+    <span class="hub-ic">🏢</span>
+    <span class="hub-tt">Minha Empresa</span>
+    <span class="muted">Nome da solução, assunto, template e tipografia.</span>
+  </a>
+  {% endif %}
+
+  {% if perfil == 'Administrador' %}
+  <a class="card hub" href="{{ url_for('usuarios') }}">
+    <span class="hub-ic">👥</span>
+    <span class="hub-tt">Usuários</span>
+    <span class="muted">Acessos, perfis e personificação.</span>
+  </a>
+  {% endif %}
+
+  {% if is_plataforma and perfil == 'Administrador' %}
+  <a class="card hub" href="{{ url_for('curadoria') }}">
+    <span class="hub-ic">🔎</span>
+    <span class="hub-tt">Curadoria</span>
+    <span class="muted">Fontes sugeridas pelas empresas para avaliar.</span>
+  </a>
+  <a class="card hub" href="{{ url_for('settings') }}">
+    <span class="hub-ic">🎨</span>
+    <span class="hub-tt">Aparência &amp; Orçamento</span>
+    <span class="muted">Tema/cores, e-mail e teto diário de custo.</span>
+  </a>
+  {% endif %}
+</div>
+{% endblock %}

@@ -73,6 +73,47 @@ def test_bootstrap_move_conteudo_atual_para_tivolitur(tmp_path):
         assert cap["empresa_id"] == tivo.id
 
 
+def test_menu_enxuto_e_hub_configuracoes(client):
+    _login(client)
+    nav = client.get("/dashboard").data.decode()
+    barra = nav[nav.find("mainnav"):nav.find("userbox")]
+    # Menu inicial enxuto: só estes quatro itens.
+    for item in ("Início", "Captação", "Informativo", "Configurações"):
+        assert item in barra
+    for fora in ("Fontes", "Usuários", "Empresas", "Auditoria", "Provedores"):
+        assert fora not in barra
+    # O hub reúne os módulos administrativos.
+    hub = client.get("/configuracoes")
+    assert hub.status_code == 200
+    corpo = hub.data.decode()
+    for modulo in ("Fontes", "Usuários", "Empresas", "Auditoria", "Provedores de IA"):
+        assert modulo in corpo
+
+
+def test_auditoria_abre(client):
+    _login(client)
+    resp = client.get("/auditoria")
+    assert resp.status_code == 200
+    assert b"Auditoria de IA" in resp.data
+
+
+def test_salvar_cor_persiste_valor_customizado(client, app):
+    from informativo.settings_repo import SettingsRepository
+
+    _login(client)
+    client.post("/settings", data={
+        "tema_primary": "#8e44ad", "api_email": "",
+        "ia_moeda": "US$", "ia_preco_in": "0.10",
+        "ia_preco_out": "0.40", "ia_limite_diario": "1.00",
+    }, follow_redirects=True)
+    with Database(app.config["DSN"]) as db:
+        assert SettingsRepository(db).get("tema_primary") == "#8e44ad"
+    # e a cor volta refletida na página (campo oculto + CSS injetado)
+    corpo = client.get("/settings").data.decode()
+    assert 'id="tema-valor" value="#8e44ad"' in corpo
+    assert "--primary: #8e44ad" in corpo
+
+
 def test_pagina_fontes_lista_seed(client):
     _login(client)
     resp = client.get("/fontes")

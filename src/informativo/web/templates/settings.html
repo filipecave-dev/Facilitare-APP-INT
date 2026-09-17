@@ -3,31 +3,31 @@
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>Configurações</h1>
-    <p class="muted">Aparência do sistema e integrações.</p>
+    <h1>Aparência &amp; Orçamento</h1>
+    <p class="muted">Tema/cores, integrações de e-mail e teto diário de custo.</p>
   </div>
+  <a class="btn" href="{{ url_for('configuracoes') }}">← Configurações</a>
 </div>
 
 <form method="post" action="{{ url_for('settings') }}">
   <div class="card">
     <h2>Tema / cores</h2>
     <p class="help">Escolha a cor de destaque do sistema. O padrão é azul.</p>
+    {# Fonte única da verdade do valor enviado: campo oculto tema_primary. #}
+    <input type="hidden" name="tema_primary" id="tema-valor" value="{{ cor_atual }}">
     <div class="swatches">
       {% for p in presets %}
-      <label class="swatch">
-        <input type="radio" name="tema_primary" value="{{ p.primary }}"
-               {{ 'checked' if p.primary|lower == cor_atual|lower }}
-               onchange="document.getElementById('cor-custom').value=this.value; document.getElementById('cor-hex').value=this.value;">
+      <button type="button" class="swatch-btn" data-cor="{{ p.primary }}"
+              onclick="setCor('{{ p.primary }}')">
         <span class="chip"><span class="dot" style="background: {{ p.primary }}"></span>{{ p.rotulo }}</span>
-      </label>
+      </button>
       {% endfor %}
     </div>
     <label>Cor personalizada
       <span class="custom-row">
-        <input type="color" id="cor-custom" value="{{ cor_atual }}"
-               onchange="document.getElementById('cor-hex').value=this.value; marcarCustom(this.value);">
+        <input type="color" id="cor-custom" value="{{ cor_atual }}" onchange="setCor(this.value)">
         <input type="text" id="cor-hex" value="{{ cor_atual }}" pattern="#[0-9a-fA-F]{6}"
-               onchange="document.getElementById('cor-custom').value=this.value; marcarCustom(this.value);">
+               oninput="setCor(this.value)">
         <span class="muted">Use o seletor ou informe um hex (#RRGGBB).</span>
       </span>
     </label>
@@ -82,28 +82,25 @@
 </form>
 
 <script>
-  // Quando o usuário escolhe uma cor personalizada que não bate com nenhum
-  // preset, desmarca os presets para deixar claro que o valor é custom.
-  function marcarCustom(valor) {
-    var achou = false;
-    document.querySelectorAll('input[name="tema_primary"]').forEach(function (r) {
-      if (r.value.toLowerCase() === valor.toLowerCase()) { r.checked = true; achou = true; }
-      else { r.checked = false; }
+  // Fonte única da verdade: o campo oculto #tema-valor é o que será enviado.
+  // Presets, seletor de cor e campo hex apenas atualizam esse valor — assim a
+  // cor salva é sempre a última escolhida (corrige o "voltava à cor anterior").
+  function setCor(valor) {
+    if (!valor) return;
+    valor = valor.trim();
+    var oculto = document.getElementById('tema-valor');
+    var picker = document.getElementById('cor-custom');
+    var hex = document.getElementById('cor-hex');
+    oculto.value = valor;
+    // Só um hex #RRGGBB válido alimenta o seletor nativo (evita erro no input).
+    if (/^#[0-9a-fA-F]{6}$/.test(valor)) { picker.value = valor; }
+    if (hex.value !== valor) { hex.value = valor; }
+    // Destaca o preset ativo, se houver.
+    document.querySelectorAll('.swatch-btn').forEach(function (b) {
+      b.classList.toggle('ativo', (b.dataset.cor || '').toLowerCase() === valor.toLowerCase());
     });
-    if (!achou) {
-      // Nenhum preset corresponde: injeta/atualiza um rádio oculto com o valor.
-      var oculto = document.getElementById('tema-custom-hidden');
-      if (!oculto) {
-        oculto = document.createElement('input');
-        oculto.type = 'radio';
-        oculto.name = 'tema_primary';
-        oculto.id = 'tema-custom-hidden';
-        oculto.style.display = 'none';
-        document.querySelector('.swatches').appendChild(oculto);
-      }
-      oculto.value = valor;
-      oculto.checked = true;
-    }
   }
+  // Estado inicial coerente com a cor atual.
+  setCor(document.getElementById('tema-valor').value);
 </script>
 {% endblock %}

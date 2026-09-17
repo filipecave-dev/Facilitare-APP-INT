@@ -1479,11 +1479,40 @@ def _registrar(app: Flask) -> None:
             flash(str(exc), "erro")
         return redirect(url_for("usuarios"))
 
+    # -- Configurações: hub que reúne os módulos administrativos -------------
+    @app.route("/configuracoes")
+    @login_obrigatorio
+    def configuracoes():
+        principal = _principal()
+        return render_template(
+            "configuracoes.html",
+            is_plataforma=_is_plataforma(principal),
+            minha_empresa=principal.empresa_id,
+        )
+
+    # -- Auditoria: histórico de uso e custo de IA --------------------------
+    @app.route("/auditoria")
+    @perfil_obrigatorio("Administrador", "Editor")
+    def auditoria():
+        from ..uso import Precos, UsoRepository
+
+        principal = _principal()
+        somente = not _is_plataforma(principal)
+        emp = principal.empresa_id
+        uso_repo = UsoRepository(_db())
+        precos = Precos(SettingsRepository(_db()))
+        return render_template(
+            "auditoria.html",
+            historico=uso_repo.historico(30, empresa_id=emp, somente_empresa=somente),
+            por_operacao=uso_repo.por_operacao(30, empresa_id=emp, somente_empresa=somente),
+            resumo=uso_repo.resumo_do_dia(precos, empresa_id=emp, somente_empresa=somente),
+            precos=precos,
+        )
+
     # -- Placeholders navegáveis (próximas iterações) -----------------------
     _pagina_em_construcao(app, "newsletter_nova", "/newsletter/new", "Criar Newsletter")
     _pagina_em_construcao(app, "newsletter_preparo", "/newsletter/prepare", "Preparo do Texto")
     _pagina_em_construcao(app, "layout", "/layout", "Editor de Layout")
-    _pagina_em_construcao(app, "auditoria", "/audit", "Auditoria")
 
     # -- Erros --------------------------------------------------------------
     @app.errorhandler(403)

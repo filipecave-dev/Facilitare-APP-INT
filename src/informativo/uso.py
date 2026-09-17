@@ -90,6 +90,39 @@ class UsoRepository:
             "custo": float(row.get("custo") or 0.0),
         }
 
+    def historico(self, dias: int = 30, *, empresa_id=None,
+                  somente_empresa: bool = False) -> list[dict]:
+        """Totais por dia (mais recentes primeiro), últimos ``dias`` dias."""
+        clausulas, params = [], []
+        if somente_empresa:
+            clausulas.append("empresa_id = ?")
+            params.append(empresa_id)
+        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        params.append(int(dias))
+        return self.db.query_all(
+            "SELECT dia, COUNT(*) AS chamadas, "
+            "COALESCE(SUM(tokens_in),0) AS tokens_in, "
+            "COALESCE(SUM(tokens_out),0) AS tokens_out, "
+            "COALESCE(SUM(custo),0) AS custo FROM uso_ia" + where +
+            " GROUP BY dia ORDER BY dia DESC LIMIT ?", params,
+        )
+
+    def por_operacao(self, dias: int = 30, *, empresa_id=None,
+                     somente_empresa: bool = False) -> list[dict]:
+        """Totais agregados por operação (captura/parafrase) no período."""
+        clausulas, params = [], []
+        if somente_empresa:
+            clausulas.append("empresa_id = ?")
+            params.append(empresa_id)
+        where = (" WHERE " + " AND ".join(clausulas)) if clausulas else ""
+        return self.db.query_all(
+            "SELECT operacao, COUNT(*) AS chamadas, "
+            "COALESCE(SUM(tokens_in),0) AS tokens_in, "
+            "COALESCE(SUM(tokens_out),0) AS tokens_out, "
+            "COALESCE(SUM(custo),0) AS custo FROM uso_ia" + where +
+            " GROUP BY operacao ORDER BY custo DESC", params,
+        )
+
     def resumo_do_dia(self, precos: Precos, *, empresa_id=None,
                       somente_empresa: bool = False) -> dict:
         """Total do dia + situação frente ao limite diário configurado."""

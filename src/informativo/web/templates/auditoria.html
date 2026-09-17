@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Auditoria — Informativo{% endblock %}
+{% macro moeda(v) %}{{ resumo.moeda }} {{ '%.4f'|format(v) }}{% endmacro %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Auditoria de IA</h1>
+    <p class="muted">Consumo de tokens e custo das chamadas de captação e paráfrase.</p>
+  </div>
+  <a class="btn" href="{{ url_for('configuracoes') }}">← Configurações</a>
+</div>
+
+<div class="cards">
+  <div class="card stat"><span class="num">{{ resumo.chamadas }}</span><span class="lbl">Chamadas hoje</span></div>
+  <div class="card stat"><span class="num">{{ '{:,}'.format(resumo.tokens_in + resumo.tokens_out).replace(',', '.') }}</span><span class="lbl">Tokens hoje</span></div>
+  <div class="card stat"><span class="num">{{ moeda(resumo.custo) }}</span><span class="lbl">Custo hoje</span></div>
+  <div class="card stat">
+    <span class="num">{% if resumo.limite and resumo.limite > 0 %}{{ resumo.moeda }} {{ '%.2f'|format(resumo.limite) }}{% else %}—{% endif %}</span>
+    <span class="lbl">{% if resumo.atingido %}Limite atingido{% elif resumo.limite and resumo.limite > 0 %}Limite diário (resta {{ moeda(resumo.resta) }}){% else %}Sem limite diário{% endif %}</span>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Por operação (30 dias)</h2>
+  {% if por_operacao %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Operação</th><th>Chamadas</th><th>Tokens entrada</th><th>Tokens saída</th><th>Custo</th></tr></thead>
+      <tbody>
+        {% for o in por_operacao %}
+        <tr>
+          <td>{{ 'Captura' if o.operacao == 'captura' else ('Paráfrase' if o.operacao == 'parafrase' else o.operacao) }}</td>
+          <td>{{ o.chamadas }}</td>
+          <td>{{ '{:,}'.format(o.tokens_in).replace(',', '.') }}</td>
+          <td>{{ '{:,}'.format(o.tokens_out).replace(',', '.') }}</td>
+          <td>{{ moeda(o.custo) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">Ainda não há uso registrado.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h2>Por dia (últimos 30 dias)</h2>
+  {% if historico %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Dia</th><th>Chamadas</th><th>Tokens</th><th>Custo</th></tr></thead>
+      <tbody>
+        {% for d in historico %}
+        <tr>
+          <td>{{ d.dia }}</td>
+          <td>{{ d.chamadas }}</td>
+          <td>{{ '{:,}'.format(d.tokens_in + d.tokens_out).replace(',', '.') }}</td>
+          <td>{{ moeda(d.custo) }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="muted">Nenhum registro no período.</p>{% endif %}
+</div>
+{% endblock %}
