@@ -251,6 +251,23 @@ def test_empresa_template_recusa_acima_de_2mb(db):
                              b"x" * (TEMPLATE_MAX_BYTES + 1))
 
 
+def test_empresa_logo_ate_512kb(db):
+    from informativo.empresas import EmpresaRepository, LOGO_MAX_BYTES
+
+    repo = EmpresaRepository(db)
+    e = repo.criar("ComLogo", nome_solucao="ComLogo")
+    assert repo.get(e.id).tem_logo is False
+    repo.salvar_logo(e.id, "logo.png", "image/png", b"\x89PNGdados")
+    emp = repo.get(e.id)
+    assert emp.tem_logo and emp.logo_nome == "logo.png" and emp.logo_mime == "image/png"
+    nome, mime, dados = repo.obter_logo(e.id)
+    assert nome == "logo.png" and mime == "image/png" and dados == b"\x89PNGdados"
+    repo.remover_logo(e.id)
+    assert repo.get(e.id).tem_logo is False
+    with pytest.raises(ValueError):
+        repo.salvar_logo(e.id, "big.png", "image/png", b"x" * (LOGO_MAX_BYTES + 1))
+
+
 # -- e-mail final do informativo --------------------------------------------
 def test_montar_email_html():
     from informativo.empresas import Empresa

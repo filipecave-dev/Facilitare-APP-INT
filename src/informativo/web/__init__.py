@@ -1143,10 +1143,13 @@ def _registrar(app: Flask) -> None:
             200, status="aprovada", empresa_id=alvo_emp,
             somente_empresa=somente or empresa is not None,
         )
-        template = None
+        template = logo = None
         if empresa and empresa.tem_template:
             template = EmpresaRepository(_db()).obter_template(empresa.id)
-        html = montar_email_html(empresa, montar_grupos(aprovadas), template=template)
+        if empresa and empresa.tem_logo:
+            logo = EmpresaRepository(_db()).obter_logo(empresa.id)
+        html = montar_email_html(empresa, montar_grupos(aprovadas),
+                                 template=template, logo=logo)
         assunto = (empresa.assunto_email if empresa else "Informativo") or "Informativo"
         return empresa, html, assunto
 
@@ -1180,10 +1183,13 @@ def _registrar(app: Flask) -> None:
         empresa = None
         if cap.get("empresa_id"):
             empresa = EmpresaRepository(_db()).get(cap["empresa_id"])
-        template = None
+        template = logo = None
         if empresa and empresa.tem_template:
             template = EmpresaRepository(_db()).obter_template(empresa.id)
-        html = montar_email_html(empresa, montar_grupos([cap]), template=template)
+        if empresa and empresa.tem_logo:
+            logo = EmpresaRepository(_db()).obter_logo(empresa.id)
+        html = montar_email_html(empresa, montar_grupos([cap]),
+                                 template=template, logo=logo)
         return empresa, cap, html
 
     @app.route("/informativo/email/<int:cid>")
@@ -1255,11 +1261,15 @@ def _registrar(app: Flask) -> None:
                 return redirect(url_for(destino))
             except ValueError as exc:
                 flash(str(exc), "erro")
-        from ..empresas import MODELOS_FONTE
+        from ..empresas import (
+            LOGO_ALTURA_BARRA, LOGO_LARGURA_MAX, MODELOS_FONTE,
+        )
         return render_template(
             "empresa_editar.html", empresa=empresa, presets=PRESETS,
             is_plataforma=_is_plataforma(principal),
             modelos_fonte=MODELOS_FONTE,
+            logo_altura=LOGO_ALTURA_BARRA,
+            logo_largura_max=LOGO_LARGURA_MAX,
         )
 
     @app.route("/empresas/<int:empresa_id>/template", methods=["POST"])
@@ -1318,6 +1328,64 @@ def _registrar(app: Flask) -> None:
         nome, mime, dados = resultado
         from flask import Response
 
+        return Response(dados, mimetype=mime, headers={
+            "Content-Disposition": f'inline; filename="{nome}"',
+        })
+
+    @app.route("/empresas/<int:empresa_id>/logo", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresa_logo_upload(empresa_id: int):
+        from ..empresas import LOGO_MAX_BYTES
+
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        arquivo = request.files.get("logo")
+        if not arquivo or not arquivo.filename:
+            flash("Selecione um arquivo de logo.", "erro")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        if not (arquivo.mimetype or "").startswith("image/"):
+            flash("O logo deve ser uma imagem (PNG, JPG, SVG ou WEBP).", "erro")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        dados = arquivo.read()
+        if len(dados) > LOGO_MAX_BYTES:
+            flash("O logo excede o limite de 512 KB.", "erro")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        try:
+            repo.salvar_logo(empresa_id, arquivo.filename,
+                             arquivo.mimetype or "image/png", dados)
+            flash("Logo enviado.", "ok")
+        except ValueError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+
+    @app.route("/empresas/<int:empresa_id>/logo/remover", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresa_logo_remover(empresa_id: int):
+        repo = EmpresaRepository(_db())
+        if repo.get(empresa_id) is None:
+            abort(404)
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        repo.remover_logo(empresa_id)
+        flash("Logo removido.", "ok")
+        return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+
+    @app.route("/empresas/<int:empresa_id>/logo/arquivo")
+    @login_obrigatorio
+    def empresa_logo_arquivo(empresa_id: int):
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        resultado = EmpresaRepository(_db()).obter_logo(empresa_id)
+        if resultado is None:
+            abort(404)
+        nome, mime, dados = resultado
         return Response(dados, mimetype=mime, headers={
             "Content-Disposition": f'inline; filename="{nome}"',
         })

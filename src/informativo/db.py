@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS empresas (
     template_nome  TEXT,
     template_mime  TEXT,
     template_dados TEXT,
+    logo_nome      TEXT,
+    logo_mime      TEXT,
+    logo_dados     TEXT,
     ativa          INTEGER NOT NULL DEFAULT 1,
     criado_em      TEXT,
     atualizado_em  TEXT
@@ -277,3 +280,6 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "empresas", "template_nome", "TEXT")
     _garantir_coluna(db, "empresas", "template_mime", "TEXT")
     _garantir_coluna(db, "empresas", "template_dados", "TEXT")
+    _garantir_coluna(db, "empresas", "logo_nome", "TEXT")
+    _garantir_coluna(db, "empresas", "logo_mime", "TEXT")
+    _garantir_coluna(db, "empresas", "logo_dados", "TEXT")

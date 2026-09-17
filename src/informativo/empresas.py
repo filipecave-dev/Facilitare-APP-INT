@@ -21,6 +21,10 @@ from .db import Database
 
 # Tamanho máximo do template de fundo do informativo (2 MB).
 TEMPLATE_MAX_BYTES = 2 * 1024 * 1024
+# Tamanho máximo do logo (512 KB) e dimensão recomendada de exibição.
+LOGO_MAX_BYTES = 512 * 1024
+LOGO_ALTURA_BARRA = 40   # px — altura na barra do informativo
+LOGO_LARGURA_MAX = 220   # px — largura máxima recomendada
 
 # 4 modelos de fonte (tipografia) comuns em informativos corporativos.
 # Cada modelo é uma pilha ``font-family`` pronta para uso no informativo/e-mail.
@@ -67,6 +71,9 @@ class Empresa:
     template_nome: Optional[str] = None
     template_mime: Optional[str] = None
     tem_template: bool = False
+    logo_nome: Optional[str] = None
+    logo_mime: Optional[str] = None
+    tem_logo: bool = False
     ativa: bool = True
     criado_em: Optional[str] = None
     atualizado_em: Optional[str] = None
@@ -84,6 +91,9 @@ def _row_para_empresa(row: dict) -> Empresa:
         template_nome=row.get("template_nome"),
         template_mime=row.get("template_mime"),
         tem_template=bool(row.get("template_dados")),
+        logo_nome=row.get("logo_nome"),
+        logo_mime=row.get("logo_mime"),
+        tem_logo=bool(row.get("logo_dados")),
         ativa=bool(row.get("ativa", 1)),
         criado_em=row.get("criado_em"),
         atualizado_em=row.get("atualizado_em"),
@@ -262,6 +272,49 @@ class EmpresaRepository:
             return None
         return (row.get("template_nome") or "template",
                 row.get("template_mime") or "application/octet-stream", dados)
+
+    # -- logo do informativo (exibido na barra, até 512 KB) ----------------
+    def salvar_logo(self, empresa_id: int, nome: str, mime: str,
+                    dados: bytes) -> None:
+        import base64
+
+        if not dados:
+            raise ValueError("Arquivo de logo vazio.")
+        if len(dados) > LOGO_MAX_BYTES:
+            raise ValueError("O logo excede o limite de 512 KB.")
+        b64 = base64.b64encode(dados).decode("ascii")
+        self.db.execute(
+            "UPDATE empresas SET logo_nome = ?, logo_mime = ?, "
+            "logo_dados = ?, atualizado_em = ? WHERE id = ?",
+            ((nome or "logo").strip(), (mime or "application/octet-stream"),
+             b64, self._agora(), empresa_id),
+        )
+        self.db.commit()
+
+    def remover_logo(self, empresa_id: int) -> None:
+        self.db.execute(
+            "UPDATE empresas SET logo_nome = NULL, logo_mime = NULL, "
+            "logo_dados = NULL, atualizado_em = ? WHERE id = ?",
+            (self._agora(), empresa_id),
+        )
+        self.db.commit()
+
+    def obter_logo(self, empresa_id: int):
+        """Devolve ``(nome, mime, bytes)`` do logo, ou ``None``."""
+        import base64
+
+        row = self.db.query_one(
+            "SELECT logo_nome, logo_mime, logo_dados FROM empresas WHERE id = ?",
+            (empresa_id,),
+        )
+        if not row or not row.get("logo_dados"):
+            return None
+        try:
+            dados = base64.b64decode(row["logo_dados"])
+        except Exception:  # noqa: BLE001
+            return None
+        return (row.get("logo_nome") or "logo",
+                row.get("logo_mime") or "application/octet-stream", dados)
 
     def alternar_ativa(self, empresa_id: int) -> None:
         self.db.execute(

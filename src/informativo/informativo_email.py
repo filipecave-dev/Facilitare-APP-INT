@@ -38,6 +38,7 @@ def montar_email_html(
     grupos: dict,
     *,
     template=None,
+    logo=None,
     data: Optional[str] = None,
 ) -> str:
     """Monta o HTML completo do e-mail do informativo.
@@ -54,6 +55,18 @@ def montar_email_html(
     if data is None:
         data = datetime.now(timezone.utc).strftime("%d/%m/%Y")
     fundo = _fundo_data_uri(template)
+    # Logo embutido (data URI) — ajustado por CSS à altura da barra.
+    logo_uri = ""
+    if logo:
+        _, lmime, ldados = logo
+        if (lmime or "").startswith("image/"):
+            import base64
+            logo_uri = f"data:{lmime};base64,{base64.b64encode(ldados).decode('ascii')}"
+    logo_html = (
+        f'<img src="{logo_uri}" alt="logo" style="height:40px;max-width:220px;'
+        'width:auto;display:block;margin-bottom:8px;object-fit:contain;">'
+        if logo_uri else ""
+    )
 
     estilo_corpo = (
         "background-color:#eef1f6;"
@@ -108,6 +121,7 @@ def montar_email_html(
                   overflow:hidden;box-shadow:0 4px 18px rgba(20,30,50,.12);">
       <tr>
         <td style="background:{escape(cor)};padding:22px 28px;">
+          {logo_html}
           <div style="color:#ffffff;font-size:22px;font-weight:700;">{escape(solucao)}</div>
           <div style="color:rgba(255,255,255,.85);font-size:13px;margin-top:2px;">
             {escape(assunto)} &middot; {escape(data)}</div>

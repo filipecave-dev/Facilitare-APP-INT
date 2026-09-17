@@ -3,6 +3,12 @@
 {% set pode_rodar = principal.perfil in ('Administrador', 'Editor') %}
 {% macro link_pagina(p) %}{{ url_for('informativo', empresa_id=empresa.id if empresa else None, por_pagina=por_pagina, pagina=p) }}{% endmacro %}
 {% block content %}
+{% if empresa and empresa.tem_logo %}
+<div class="card" style="background:{{ empresa.tema_primary or '#2557d6' }};padding:14px 18px">
+  <img src="{{ url_for('empresa_logo_arquivo', empresa_id=empresa.id) }}" alt="logo"
+       style="height:40px;max-width:220px;width:auto;object-fit:contain;display:block">
+</div>
+{% endif %}
 <div class="page-head">
   <div>
     <h1>Comunicados do Informativo</h1>

@@ -98,4 +98,46 @@
   </form>
   {% endif %}
 </div>
+
+<div class="card">
+  <h2>Logo da empresa</h2>
+  <p class="help">Aparece na <strong>barra superior do informativo</strong>. O sistema
+     ajusta automaticamente para caber na barra (altura de <strong>{{ logo_altura }} px</strong>,
+     largura proporcional). Recomendado: PNG com <strong>fundo transparente</strong>,
+     em torno de <strong>{{ logo_largura_max }}×{{ logo_altura }} px</strong> (2× para telas retina).
+     Formatos: PNG, JPG, SVG ou WEBP. Tamanho máximo: <strong>512 KB</strong>.</p>
+  {% if empresa.tem_logo %}
+  <div class="card note" style="margin:0 0 12px;background:#f6f8fc">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <span class="muted">Prévia na barra:</span>
+      <span style="display:inline-flex;align-items:center;height:{{ logo_altura + 16 }}px;padding:0 12px;background:{{ empresa.tema_primary or '#2557d6' }};border-radius:8px">
+        <img src="{{ url_for('empresa_logo_arquivo', empresa_id=empresa.id) }}" alt="logo"
+             style="height:{{ logo_altura }}px;max-width:{{ logo_largura_max }}px;width:auto;object-fit:contain;display:block">
+      </span>
+      <span class="muted" style="font-size:12px">{{ empresa.logo_nome }} · {{ empresa.logo_mime }}</span>
+    </div>
+  </div>
+  {% else %}
+  <p class="muted">Nenhum logo enviado ainda.</p>
+  {% endif %}
+  {% if pode_gerir %}
+  <form method="post" enctype="multipart/form-data"
+        action="{{ url_for('empresa_logo_upload', empresa_id=empresa.id) }}">
+    <div class="grid">
+      <label>Arquivo de logo (imagem, até 512 KB)
+        <input type="file" name="logo" accept="image/png,image/jpeg,image/webp,image/svg+xml" required>
+      </label>
+    </div>
+    <div class="form-actions" style="margin-top:12px">
+      <button type="submit" class="btn btn-primary">Enviar logo</button>
+      {% if empresa.tem_logo %}
+      <button type="submit" class="btn btn-danger"
+              formaction="{{ url_for('empresa_logo_remover', empresa_id=empresa.id) }}"
+              formnovalidate
+              onclick="return confirm('Remover o logo atual?');">Remover logo</button>
+      {% endif %}
+    </div>
+  </form>
+  {% endif %}
+</div>
 {% endblock %}
