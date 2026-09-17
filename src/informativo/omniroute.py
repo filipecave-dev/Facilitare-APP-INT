@@ -276,6 +276,96 @@ class CaptacaoRepository:
     def count(self) -> int:
         return int(self.db.scalar("SELECT COUNT(*) FROM captacoes") or 0)
 
+    def definir_disparado(self, captacao_id: int, disparado: bool = True) -> None:
+        """Marca (ou desmarca) o comunicado como disparado, com carimbo de data."""
+        from datetime import datetime, timezone
+
+        quando = datetime.now(timezone.utc).isoformat() if disparado else None
+        self.db.execute(
+            "UPDATE captacoes SET disparado_em = ? WHERE id = ?",
+            (quando, captacao_id),
+        )
+        self.db.commit()
+
+    # -- indicadores para o painel -----------------------------------------
+    def metricas(self, *, empresa_id=None, somente_empresa: bool = False) -> dict:
+        """Contadores e datas para o painel, respeitando o escopo de empresa."""
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        where = (" WHERE " + cl) if cl else ""
+        row = self.db.query_one(
+            "SELECT COUNT(*) AS captadas, "
+            "COALESCE(SUM(CASE WHEN status='aprovada' THEN 1 ELSE 0 END),0) AS aprovadas, "
+            "COALESCE(SUM(CASE WHEN status='descartada' THEN 1 ELSE 0 END),0) AS descartadas, "
+            "COALESCE(SUM(CASE WHEN status='pendente' THEN 1 ELSE 0 END),0) AS pendentes, "
+            "COALESCE(SUM(CASE WHEN parafrase IS NOT NULL AND parafrase <> '' THEN 1 ELSE 0 END),0) AS parafraseadas, "
+            "COALESCE(SUM(CASE WHEN disparado_em IS NOT NULL THEN 1 ELSE 0 END),0) AS disparadas, "
+            "COUNT(DISTINCT fonte_id) AS fontes_consultadas, "
+            "MAX(criado_em) AS ultima_captacao, "
+            "MAX(disparado_em) AS ultimo_disparo "
+            "FROM captacoes" + where, pa,
+        ) or {}
+        return {k: (int(v) if isinstance(v, (int, float)) or (isinstance(v, str) and v.isdigit())
+                    else v) for k, v in row.items()}
+
+    def top_fontes(self, limite: int = 8, *, empresa_id=None,
+                   somente_empresa: bool = False) -> list[dict]:
+        """Fontes mais utilizadas (mais captações), com aproveitamento."""
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        where = (" WHERE " + cl) if cl else ""
+        pa = list(pa) + [int(limite)]
+        return self.db.query_all(
+            "SELECT fonte_nome, COUNT(*) AS total, "
+            "COALESCE(SUM(CASE WHEN status='aprovada' THEN 1 ELSE 0 END),0) AS aprovadas "
+            "FROM captacoes" + where +
+            " GROUP BY fonte_nome ORDER BY total DESC, fonte_nome ASC LIMIT ?", pa,
+        )
+
+    def fontes_sem_relevancia(self, limite: int = 8, *, empresa_id=None,
+                              somente_empresa: bool = False) -> list[dict]:
+        """Fontes que trouxeram captações mas nenhuma foi aprovada (0 relevância)."""
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        where = (" WHERE " + cl) if cl else ""
+        pa = list(pa) + [int(limite)]
+        return self.db.query_all(
+            "SELECT fonte_nome, COUNT(*) AS total, "
+            "COALESCE(SUM(CASE WHEN status='descartada' THEN 1 ELSE 0 END),0) AS descartadas "
+            "FROM captacoes" + where +
+            " GROUP BY fonte_nome "
+            "HAVING SUM(CASE WHEN status='aprovada' THEN 1 ELSE 0 END) = 0 "
+            "ORDER BY total DESC, fonte_nome ASC LIMIT ?", pa,
+        )
+
+    def por_frente(self, *, empresa_id=None, somente_empresa: bool = False) -> dict:
+        """Distribuição das aprovadas pelas frentes editoriais."""
+        clausulas, params = ["status = 'aprovada'"], []
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        if cl:
+            clausulas.append(cl)
+            params += pa
+        where = " WHERE " + " AND ".join(clausulas)
+        linhas = self.db.query_all(
+            "SELECT frente, COUNT(*) AS n FROM captacoes" + where +
+            " GROUP BY frente", params,
+        )
+        base = {f: 0 for f in self.FRENTES}
+        for l in linhas:
+            fr = l["frente"] or "Informativo"
+            base[fr] = base.get(fr, 0) + int(l["n"])
+        return base
+
+    def serie_diaria(self, dias: int = 14, *, empresa_id=None,
+                     somente_empresa: bool = False) -> list[dict]:
+        """Captações por dia (últimos ``dias`` dias), mais recentes por último."""
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        where = (" WHERE " + cl) if cl else ""
+        linhas = self.db.query_all(
+            "SELECT substr(criado_em,1,10) AS dia, COUNT(*) AS n "
+            "FROM captacoes" + where +
+            " GROUP BY substr(criado_em,1,10) ORDER BY dia DESC LIMIT ?",
+            list(pa) + [int(dias)],
+        )
+        return list(reversed(linhas))
+
 
 def client_from_settings(settings_repo, timeout: int = 60) -> OmnirouteClient:
     """Monta um :class:`OmnirouteClient` a partir das configurações salvas."""

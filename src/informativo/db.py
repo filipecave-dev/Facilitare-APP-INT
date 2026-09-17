@@ -106,6 +106,7 @@ CREATE TABLE IF NOT EXISTS captacoes (
     prioridade INTEGER NOT NULL DEFAULT 0,
     assinatura TEXT,
     status     TEXT NOT NULL DEFAULT 'pendente',
+    disparado_em TEXT,
     criado_em  TEXT
 );
 
@@ -272,6 +273,7 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "captacoes", "frente", "TEXT")
     _garantir_coluna(db, "captacoes", "prioridade", "INTEGER NOT NULL DEFAULT 0")
     _garantir_coluna(db, "captacoes", "assinatura", "TEXT")
+    _garantir_coluna(db, "captacoes", "disparado_em", "TEXT")
     _garantir_coluna(db, "provedores_ia", "empresa_id", "INTEGER")
     _garantir_coluna(db, "usuarios", "empresa_id", "INTEGER")
     _garantir_coluna(db, "fontes", "empresa_id", "INTEGER")

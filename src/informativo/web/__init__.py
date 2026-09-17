@@ -300,26 +300,45 @@ def _registrar(app: Flask) -> None:
     @login_obrigatorio
     def dashboard():
         from ..omniroute import CaptacaoRepository
+        from ..uso import Precos, UsoRepository
 
         principal = _principal()
+        plataforma = _is_plataforma(principal)
         repo = FonteRepository(_db())
-        resumo = repo.resumo()
-        recentes = repo.listar()[:8]
-        somente = not _is_plataforma(principal)
-        cap = CaptacaoRepository(_db()).contar_por_status(
-            empresa_id=principal.empresa_id, somente_empresa=somente
-        )
+        cap_repo = CaptacaoRepository(_db())
+
+        # Escopo: empresa vê só o seu; plataforma vê tudo e pode filtrar por
+        # empresa cadastrada (?empresa_id=). Sem filtro, a plataforma vê o todo.
+        if plataforma:
+            eid = request.args.get("empresa_id") or None
+            filtro_empresa = int(eid) if eid else None
+            somente = filtro_empresa is not None
+        else:
+            filtro_empresa = principal.empresa_id
+            somente = True
+
+        m = cap_repo.metricas(empresa_id=filtro_empresa, somente_empresa=somente)
+        uso = UsoRepository(_db()).resumo_do_dia(
+            Precos(SettingsRepository(_db())),
+            empresa_id=filtro_empresa, somente_empresa=somente)
         empresa = None
-        if principal.empresa_id is not None:
-            empresa = EmpresaRepository(_db()).get(principal.empresa_id)
+        empresa_alvo = filtro_empresa if plataforma else principal.empresa_id
+        if empresa_alvo is not None:
+            empresa = EmpresaRepository(_db()).get(empresa_alvo)
         return render_template(
             "dashboard.html",
-            resumo=resumo,
-            recentes=recentes,
+            resumo=repo.resumo(),
+            is_plataforma=plataforma,
             total_empresas=EmpresaRepository(_db()).count(),
-            is_plataforma=_is_plataforma(principal),
-            captacao=cap,
+            empresas=EmpresaRepository(_db()).listar() if plataforma else [],
+            filtro_empresa=filtro_empresa,
             empresa=empresa,
+            m=m,
+            uso=uso,
+            top_fontes=cap_repo.top_fontes(8, empresa_id=filtro_empresa, somente_empresa=somente),
+            fontes_fracas=cap_repo.fontes_sem_relevancia(8, empresa_id=filtro_empresa, somente_empresa=somente),
+            por_frente=cap_repo.por_frente(empresa_id=filtro_empresa, somente_empresa=somente),
+            serie=cap_repo.serie_diaria(14, empresa_id=filtro_empresa, somente_empresa=somente),
         )
 
     # -- Gerenciar fontes (globais + privadas por empresa) ------------------
@@ -1205,6 +1224,26 @@ def _registrar(app: Flask) -> None:
         return Response(html, mimetype="text/html", headers={
             "Content-Disposition": f'attachment; filename="comunicado-{cid}.html"',
         })
+
+    @app.route("/informativo/<int:cid>/disparar", methods=["POST"])
+    @perfil_obrigatorio("Administrador", "Editor")
+    def informativo_disparar(cid: int):
+        """Marca/desmarca um comunicado como disparado (para os indicadores)."""
+        from ..omniroute import CaptacaoRepository
+
+        repo = CaptacaoRepository(_db())
+        cap = repo.get(cid)
+        if cap is None:
+            abort(404)
+        principal = _principal()
+        if not _is_plataforma(principal) and cap.get("empresa_id") != principal.empresa_id:
+            abort(403)
+        marcar = request.form.get("desmarcar") != "1"
+        repo.definir_disparado(cid, marcar)
+        flash("Comunicado marcado como disparado." if marcar
+              else "Marcação de disparo removida.", "ok")
+        return redirect(request.referrer or url_for("informativo",
+                        empresa_id=cap.get("empresa_id")))
 
     # -- Empresas (clientes) — gestão global (plataforma) -------------------
     @app.route("/empresas")

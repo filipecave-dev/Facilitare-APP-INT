@@ -1,51 +1,150 @@
 {% extends "base.html" %}
 {% block title %}Painel — Informativo{% endblock %}
+{% macro data_curta(s) %}{{ (s or '')[:16].replace('T',' ') if s else '—' }}{% endmacro %}
 {% block content %}
 <div class="page-head">
   <div>
     <h1>Painel Principal</h1>
     <p class="muted">
       {% if empresa %}Empresa: <strong>{{ empresa.nome }}</strong> — solução “{{ empresa.nome_solucao }}”.
-      {% else %}Visão geral (plataforma).{% endif %}
+      {% elif is_plataforma %}Visão geral da plataforma (todas as empresas).{% endif %}
     </p>
   </div>
   <a class="btn btn-primary" href="{{ url_for('captacao') }}">Ir para Captação</a>
 </div>
 
+{% if is_plataforma %}
+<div class="card">
+  <form method="get" action="{{ url_for('dashboard') }}" class="form-actions">
+    <label style="max-width:340px;margin:0">Filtrar por empresa
+      <select name="empresa_id" onchange="this.form.submit()">
+        <option value="">Todas as empresas (plataforma)</option>
+        {% for e in empresas %}
+        <option value="{{ e.id }}" {{ 'selected' if filtro_empresa == e.id }}>{{ e.nome }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <noscript><button class="btn btn-sm">Aplicar</button></noscript>
+  </form>
+</div>
+{% endif %}
+
+{# ---- Indicadores principais ---- #}
 <div class="cards">
-  <div class="card stat"><span class="num">{{ resumo.total }}</span><span class="lbl">Fontes no catálogo</span></div>
-  <div class="card stat"><span class="num">{{ captacao.pendente }}</span><span class="lbl">Captações aguardando</span></div>
-  <div class="card stat"><span class="num">{{ captacao.aprovada }}</span><span class="lbl">Aprovadas (podem usar)</span></div>
-  {% if is_plataforma %}
-  <div class="card stat"><span class="num">{{ total_empresas }}</span><span class="lbl">Empresas (clientes)</span></div>
-  {% else %}
-  <div class="card stat"><span class="num">{{ resumo.categorias }}</span><span class="lbl">Categorias</span></div>
-  {% endif %}
+  <div class="card stat"><span class="num">{{ m.captadas }}</span><span class="lbl">Notícias captadas</span></div>
+  <div class="card stat"><span class="num" style="color:#1f9d57">{{ m.aprovadas }}</span><span class="lbl">Aprovadas</span></div>
+  <div class="card stat"><span class="num" style="color:#b42318">{{ m.descartadas }}</span><span class="lbl">Descartadas</span></div>
+  <div class="card stat"><span class="num">{{ m.parafraseadas }}</span><span class="lbl">Parafraseadas</span></div>
+  <div class="card stat"><span class="num">{{ m.disparadas }}</span><span class="lbl">Disparadas</span></div>
+  <div class="card stat"><span class="num">{{ m.fontes_consultadas }}</span><span class="lbl">Fontes consultadas</span></div>
 </div>
 
-<div class="card">
-  <h2>Fontes recentes / prioritárias</h2>
-  {% if recentes %}
-  <div class="tablewrap">
-    <table>
-      <thead>
-        <tr><th>Fonte</th><th>Categoria</th><th>País/Região</th><th>Prioridade</th><th>Situação</th></tr>
-      </thead>
-      <tbody>
-        {% for f in recentes %}
-        <tr>
-          <td><a href="{{ f.url }}" target="_blank" rel="noopener">{{ f.nome }}</a></td>
-          <td>{{ f.categoria or '—' }}</td>
-          <td>{{ f.regiao or '—' }}</td>
-          <td><span class="stars">{% for i in range(1,6) %}<span class="{{ '' if i <= f.prioridade else 'off' }}">★</span>{% endfor %}</span></td>
-          <td>{% if f.ativa %}<span class="pill on">Ativa</span>{% else %}<span class="pill off">Inativa</span>{% endif %}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+<div class="cards">
+  <div class="card stat"><span class="num" style="font-size:18px">{{ data_curta(m.ultima_captacao) }}</span><span class="lbl">Última captação</span></div>
+  <div class="card stat"><span class="num" style="font-size:18px">{{ data_curta(m.ultimo_disparo) }}</span><span class="lbl">Último disparo</span></div>
+  <div class="card stat"><span class="num" style="font-size:18px">{{ uso.moeda }} {{ '%.4f'|format(uso.custo) }}</span><span class="lbl">Custo de IA hoje</span></div>
+  <div class="card stat"><span class="num">{{ resumo.ativas }}/{{ resumo.total }}</span><span class="lbl">Fontes ativas no catálogo</span></div>
+</div>
+
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;align-items:start">
+
+  {# ---- Funil de triagem ---- #}
+  <div class="card">
+    <h2>Funil de triagem</h2>
+    {% set etapas = [('Captadas', m.captadas, 'var(--primary)'),
+                     ('Aprovadas', m.aprovadas, '#1f9d57'),
+                     ('Parafraseadas', m.parafraseadas, '#2f6df6'),
+                     ('Disparadas', m.disparadas, '#7a4dff'),
+                     ('Descartadas', m.descartadas, '#b42318')] %}
+    {% set base = m.captadas if m.captadas and m.captadas > 0 else 1 %}
+    {% for rot, val, cor in etapas %}
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+        <span>{{ rot }}</span><strong>{{ val }}</strong>
+      </div>
+      <div style="background:#eef1f6;border-radius:6px;height:14px;overflow:hidden">
+        <div style="height:100%;width:{{ (val / base * 100) | round(1) }}%;background:{{ cor }}"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% if not m.captadas %}<p class="muted">Sem captações ainda. Rode a captação para ver os números.</p>{% endif %}
   </div>
-  {% else %}
-  <p class="muted">Nenhuma fonte cadastrada ainda.</p>
-  {% endif %}
+
+  {# ---- Captações por dia (14 dias) ---- #}
+  <div class="card">
+    <h2>Captações por dia (14 dias)</h2>
+    {% if serie %}
+    {% set maxn = (serie | map(attribute='n') | max) or 1 %}
+    <div style="display:flex;align-items:flex-end;gap:6px;height:140px;padding-top:6px">
+      {% for d in serie %}
+      <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%">
+        <span style="font-size:11px;color:var(--muted)">{{ d.n }}</span>
+        <div title="{{ d.dia }}: {{ d.n }}" style="width:100%;background:var(--primary);border-radius:4px 4px 0 0;
+             height:{{ (d.n / maxn * 110) | round(0) }}px;min-height:2px"></div>
+        <span style="font-size:10px;color:var(--muted);margin-top:2px">{{ d.dia[8:10] }}/{{ d.dia[5:7] }}</span>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">Sem dados no período.</p>{% endif %}
+  </div>
+
+  {# ---- Por frente ---- #}
+  <div class="card">
+    <h2>Aprovadas por frente</h2>
+    {% set totf = por_frente.values() | sum %}
+    {% set maxf = (por_frente.values() | max) or 1 %}
+    {% set cores_fr = {'Alerta':'#b42318','Informativo':'#2557d6','Notícias de Mercado':'#1f9d57'} %}
+    {% for fr, val in por_frente.items() %}
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+        <span>{{ fr }}</span><strong>{{ val }}</strong>
+      </div>
+      <div style="background:#eef1f6;border-radius:6px;height:14px;overflow:hidden">
+        <div style="height:100%;width:{{ (val / maxf * 100) | round(1) }}%;background:{{ cores_fr.get(fr, 'var(--primary)') }}"></div>
+      </div>
+    </div>
+    {% endfor %}
+    {% if not totf %}<p class="muted">Nenhuma aprovada classificada ainda.</p>{% endif %}
+  </div>
+
+  {# ---- Fontes mais utilizadas ---- #}
+  <div class="card">
+    <h2>Fontes mais utilizadas</h2>
+    {% if top_fontes %}
+    {% set maxt = top_fontes[0].total or 1 %}
+    {% for f in top_fontes %}
+    <div style="margin:8px 0">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:3px">
+        <span>{{ f.fonte_nome }}</span>
+        <span class="muted">{{ f.total }} <span style="color:#1f9d57">({{ f.aprovadas }} aprov.)</span></span>
+      </div>
+      <div style="background:#eef1f6;border-radius:6px;height:14px;overflow:hidden;position:relative">
+        <div style="height:100%;width:{{ (f.total / maxt * 100) | round(1) }}%;background:var(--primary)"></div>
+        <div style="position:absolute;top:0;left:0;height:100%;width:{{ (f.aprovadas / maxt * 100) | round(1) }}%;background:#1f9d57"></div>
+      </div>
+    </div>
+    {% endfor %}
+    <p class="help">Barra clara = captações; verde = aproveitadas (aprovadas).</p>
+    {% else %}<p class="muted">Nenhuma captação registrada.</p>{% endif %}
+  </div>
+
+  {# ---- Fontes que não trouxeram notícias relevantes ---- #}
+  <div class="card">
+    <h2>Fontes sem relevância</h2>
+    <p class="help">Trouxeram conteúdo, mas nada foi aprovado — candidatas a revisão.</p>
+    {% if fontes_fracas %}
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Fonte</th><th>Captações</th><th>Descartadas</th></tr></thead>
+        <tbody>
+          {% for f in fontes_fracas %}
+          <tr><td>{{ f.fonte_nome }}</td><td>{{ f.total }}</td><td>{{ f.descartadas }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}<p class="muted">Nenhuma — todas as fontes com captação tiveram ao menos uma aprovada. 👍</p>{% endif %}
+  </div>
+
 </div>
 {% endblock %}

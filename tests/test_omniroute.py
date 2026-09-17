@@ -209,6 +209,53 @@ def test_normalizar_modelo_gemini(db):
     assert repo.normalizar_modelo_gemini() == 0
 
 
+def test_metricas_do_painel(db):
+    repo_f = FonteRepository(db)
+    fa = repo_f.criar("Reuters", "reuters.com")
+    fb = repo_f.criar("G1", "g1.com")
+    cap = CaptacaoRepository(db)
+    # Reuters: 2 captações, 1 aprovada (com paráfrase e disparo) e 1 descartada
+    a1 = cap.registrar(fa, "Alpha greve aeroporto Guarulhos hoje.")
+    a2 = cap.registrar(fa, "Beta enchente litoral norte agora.")
+    cap.definir_status(a1, "aprovada"); cap.definir_parafrase(a1, "reescrito")
+    cap.definir_frente(a1, "Alerta"); cap.definir_disparado(a1)
+    cap.definir_status(a2, "descartada")
+    # G1: 1 captação sem aprovação (fonte sem relevância)
+    b1 = cap.registrar(fb, "Gama feira gastronomia centro cidade.")
+    cap.definir_status(b1, "descartada")
+
+    m = cap.metricas()
+    assert m["captadas"] == 3
+    assert m["aprovadas"] == 1 and m["descartadas"] == 2
+    assert m["parafraseadas"] == 1 and m["disparadas"] == 1
+    assert m["fontes_consultadas"] == 2
+    assert m["ultima_captacao"] and m["ultimo_disparo"]
+
+    top = cap.top_fontes(5)
+    assert top[0]["fonte_nome"] == "Reuters" and top[0]["total"] == 2
+    assert top[0]["aprovadas"] == 1
+
+    fracas = {f["fonte_nome"] for f in cap.fontes_sem_relevancia(5)}
+    assert "G1" in fracas and "Reuters" not in fracas  # Reuters teve 1 aprovada
+
+    frentes = cap.por_frente()
+    assert frentes["Alerta"] == 1
+
+    serie = cap.serie_diaria(14)
+    assert sum(d["n"] for d in serie) == 3
+
+
+def test_definir_disparado_toggle(db):
+    f = FonteRepository(db).criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    cid = cap.registrar(f, "Notícia para disparo.")
+    assert cap.get(cid)["disparado_em"] is None
+    cap.definir_disparado(cid, True)
+    assert cap.get(cid)["disparado_em"] is not None
+    cap.definir_disparado(cid, False)
+    assert cap.get(cid)["disparado_em"] is None
+
+
 def test_prompt_parafrase_tem_frente_e_conteudo(db):
     cap = {
         "fonte_nome": "Reuters", "regiao": "Brasil",

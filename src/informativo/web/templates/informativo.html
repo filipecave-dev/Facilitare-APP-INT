@@ -87,6 +87,7 @@
       {% if c.prioridade and c.prioridade >= 1000 %}<span class="pill" style="background:#ffe5e5;color:#b42318">Desastre natural</span>
       {% elif c.prioridade and c.prioridade >= 500 %}<span class="pill" style="background:#ffe9d6;color:#b45309">Greve aérea</span>
       {% elif c.prioridade and c.prioridade >= 200 %}<span class="pill" style="background:#fff5e5;color:#9a6300">Aviação/Viagem</span>{% endif %}
+      {% if c.disparado_em %}<span class="pill on">✓ Disparado</span>{% endif %}
       <strong style="margin-left:6px">{{ c.fonte_nome }}</strong>
     </div>
     <span class="muted">{{ (c.criado_em or '')[:16].replace('T',' ') }}</span>
@@ -103,6 +104,12 @@
     <a class="btn btn-sm btn-primary" target="_blank" rel="noopener"
        href="{{ url_for('informativo_email_item', cid=c.id) }}">Ver comunicado</a>
     <a class="btn btn-sm" href="{{ url_for('informativo_email_item_baixar', cid=c.id) }}">Baixar (.html)</a>
+    {% if pode_rodar %}
+    <form class="inline-form" method="post" action="{{ url_for('informativo_disparar', cid=c.id) }}">
+      {% if c.disparado_em %}<input type="hidden" name="desmarcar" value="1">{% endif %}
+      <button class="btn btn-sm">{{ 'Desfazer disparo' if c.disparado_em else 'Marcar disparado' }}</button>
+    </form>
+    {% endif %}
     {% if pode_rodar and provedores %}
     <form class="inline-form" method="post" action="{{ url_for('captacao_parafrasear', cid=c.id) }}"
           onsubmit="var b=this.querySelector('button'); b.disabled=true; b.textContent='Gerando…';">
