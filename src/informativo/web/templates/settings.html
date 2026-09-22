@@ -69,6 +69,28 @@
        no total (~25 mil tokens).</p>
   </div>
 
+  <div class="card">
+    <h2>Plano gratuito do banco (Render)</h2>
+    <p class="help">O PostgreSQL gratuito do Render expira após alguns dias.
+       Informe a <strong>data em que o banco foi conectado</strong> e o total de
+       dias gratuitos — a tela inicial mostra o regressivo ao Administrador.</p>
+    <div class="grid">
+      <label>Data de início (conexão do banco)
+        <input type="date" name="db_free_inicio"
+               value="{{ plano_bd.inicio.isoformat() if plano_bd else '' }}">
+      </label>
+      <label>Dias gratuitos
+        <input type="number" name="db_free_dias" min="1" max="365"
+               value="{{ plano_bd.dias_total if plano_bd else 30 }}">
+      </label>
+    </div>
+    {% if plano_bd %}
+    <p class="help">Expira em <strong>{{ plano_bd.expira.strftime('%d/%m/%Y') }}</strong> —
+      {% if plano_bd.expirado %}<span style="color:#b42318">prazo esgotado há {{ -plano_bd.restantes }} dia(s)</span>
+      {% else %}faltam <strong>{{ plano_bd.restantes }}</strong> dia(s){% endif %}.</p>
+    {% endif %}
+  </div>
+
   {% if principal.perfil == 'Administrador' %}
   <div class="card note">
     <p>🤖 As conexões de IA (OmniRoute, GPT, DeepSeek, Gemini, Claude) para a

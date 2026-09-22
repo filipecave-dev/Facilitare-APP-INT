@@ -13,6 +13,35 @@
   <a class="btn btn-primary" href="{{ url_for('captacao') }}">Ir para Captação</a>
 </div>
 
+{% if plano_bd %}
+{% set cor_bd = '#b42318' if (plano_bd.expirado or plano_bd.restantes <= 3) else ('#d4a017' if plano_bd.alerta else '#1f9d57') %}
+<div class="card" style="border-left:5px solid {{ cor_bd }};display:flex;align-items:center;
+     justify-content:space-between;gap:16px;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:16px">
+    <div style="text-align:center;min-width:96px">
+      <div style="font-size:34px;font-weight:800;line-height:1;color:{{ cor_bd }}">
+        {{ plano_bd.restantes if not plano_bd.expirado else 0 }}</div>
+      <div class="muted" style="font-size:12px">dia(s) restante(s)</div>
+    </div>
+    <div>
+      <strong>Plano gratuito do banco (Render)</strong>
+      {% if plano_bd.expirado %}
+      <p class="muted" style="margin:2px 0 0;color:#b42318">Prazo esgotado em
+        {{ plano_bd.expira.strftime('%d/%m/%Y') }} — migre para o plano pago para não perder dados.</p>
+      {% else %}
+      <p class="muted" style="margin:2px 0 0">Gratuito por {{ plano_bd.dias_total }} dias desde
+        {{ plano_bd.inicio.strftime('%d/%m/%Y') }} · expira em
+        <strong>{{ plano_bd.expira.strftime('%d/%m/%Y') }}</strong>.</p>
+      {% endif %}
+      <div style="background:#eef1f6;border-radius:6px;height:8px;overflow:hidden;margin-top:6px;width:min(360px,60vw)">
+        <div style="height:100%;width:{{ plano_bd.pct }}%;background:{{ cor_bd }}"></div>
+      </div>
+    </div>
+  </div>
+  <a class="btn btn-sm" href="{{ url_for('settings') }}">Ajustar data / migrar</a>
+</div>
+{% endif %}
+
 {% if is_plataforma %}
 <div class="card">
   <form method="get" action="{{ url_for('dashboard') }}" class="form-actions">

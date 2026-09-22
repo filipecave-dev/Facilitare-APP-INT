@@ -74,6 +74,12 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_rss_ativadas") != "1":
             FonteRepository(db).ativar_com_rss_global()
             sett.set("fontes_rss_ativadas", "1")
+        # Marca a data de início do plano gratuito do banco (Render) na 1ª vez
+        # que o sistema sobe. O Administrador pode ajustá-la em Configurações
+        # para a data real em que o banco foi conectado.
+        from ..plano import garantir_inicio
+
+        garantir_inicio(sett)
         # Ajuste único: conexões Gemini legadas passam a usar o modelo
         # econômico gemini-2.5-flash-lite.
         if sett.get("gemini_25_flash_lite") != "1":
@@ -327,8 +333,16 @@ def _registrar(app: Flask) -> None:
         empresa_alvo = filtro_empresa if plataforma else principal.empresa_id
         if empresa_alvo is not None:
             empresa = EmpresaRepository(_db()).get(empresa_alvo)
+        # Regressivo do plano gratuito do banco — só para o Administrador da
+        # plataforma (quem cuida da infraestrutura/migração ao plano pago).
+        plano_bd = None
+        if plataforma and principal.perfil == "Administrador":
+            from ..plano import contagem_regressiva
+
+            plano_bd = contagem_regressiva(SettingsRepository(_db()))
         return render_template(
             "dashboard.html",
+            plano_bd=plano_bd,
             resumo=repo.resumo(),
             is_plataforma=plataforma,
             total_empresas=EmpresaRepository(_db()).count(),
@@ -564,14 +578,24 @@ def _registrar(app: Flask) -> None:
             repo.set(CFG_PRECO_OUT, (request.form.get("ia_preco_out", "") or "0").strip())
             repo.set(CFG_MOEDA, (request.form.get("ia_moeda", "") or "US$").strip())
             repo.set(CFG_LIMITE_DIA, (request.form.get("ia_limite_diario", "") or "0").strip())
+            # Plano gratuito do banco (Render): data de início e total de dias.
+            from ..plano import CFG_DB_DIAS, CFG_DB_INICIO
+
+            di = (request.form.get("db_free_inicio", "") or "").strip()
+            if di:
+                repo.set(CFG_DB_INICIO, di)
+            repo.set(CFG_DB_DIAS, (request.form.get("db_free_dias", "") or "30").strip())
             flash("Configurações salvas.", "ok")
             return redirect(url_for("settings"))
+        from ..plano import contagem_regressiva
+
         return render_template(
             "settings.html",
             presets=PRESETS,
             cor_atual=repo.get(CHAVE_TEMA, TEMA_PADRAO),
             api_email=repo.get("api_email", ""),
             precos=Precos(repo),
+            plano_bd=contagem_regressiva(repo),
         )
 
     # -- Provedores de IA (conexões: OmniRoute/GPT/DeepSeek/Gemini/Claude) --
