@@ -74,12 +74,16 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_rss_ativadas") != "1":
             FonteRepository(db).ativar_com_rss_global()
             sett.set("fontes_rss_ativadas", "1")
-        # Marca a data de início do plano gratuito do banco (Render) na 1ª vez
-        # que o sistema sobe. O Administrador pode ajustá-la em Configurações
-        # para a data real em que o banco foi conectado.
-        from ..plano import garantir_inicio
+        # Marca a data de início do plano gratuito do banco (Render). Na 1ª vez
+        # define hoje; e uma correção única alinha à data real em que o banco
+        # foi provisionado no Render. O Administrador pode reajustar depois em
+        # Configurações.
+        from ..plano import CFG_DB_INICIO, DATA_INICIO_OPERACAO, garantir_inicio
 
         garantir_inicio(sett)
+        if sett.get("db_free_inicio_ajustado") != "1":
+            sett.set(CFG_DB_INICIO, DATA_INICIO_OPERACAO)
+            sett.set("db_free_inicio_ajustado", "1")
         # Ajuste único: conexões Gemini legadas passam a usar o modelo
         # econômico gemini-2.5-flash-lite.
         if sett.get("gemini_25_flash_lite") != "1":

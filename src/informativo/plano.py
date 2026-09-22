@@ -17,6 +17,11 @@ CFG_DB_INICIO = "db_free_inicio"   # data ISO (YYYY-MM-DD) da conexão do banco
 CFG_DB_DIAS = "db_free_dias"       # total de dias gratuitos (padrão 30)
 PADRAO_DIAS = 30
 
+# Início real da operação: data em que o PostgreSQL gratuito foi provisionado
+# no Render (commit a2dda9e "Suporte a PostgreSQL + banco gratuito no Render").
+# Usada como correção única do contador; ajustável depois em Configurações.
+DATA_INICIO_OPERACAO = "2026-09-14"
+
 
 def hoje() -> date:
     return datetime.now(timezone.utc).date()
