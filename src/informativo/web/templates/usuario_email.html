@@ -1,18 +1,17 @@
 {% extends "base.html" %}
-{% block title %}E-mail de {{ conta.username }} — Informativo{% endblock %}
+{% block title %}{{ titulo }} — Informativo{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <h1>E-mail para disparo</h1>
-    <p class="muted">Conta de envio do usuário <strong>{{ conta.username }}</strong>
-      {% if conta.nome %}({{ conta.nome }}){% endif %}. Funciona com qualquer provedor —
+    <h1>{{ titulo }}</h1>
+    <p class="muted">{{ subtitulo }} Funciona com qualquer provedor —
       Google, Microsoft ou servidor próprio (SMTP/IMAP).</p>
   </div>
-  <a class="btn" href="{{ url_for('usuarios') }}">← Usuários</a>
+  <a class="btn" href="{{ url_voltar }}">← Voltar</a>
 </div>
 
 <div class="card">
-  <form method="post" action="{{ url_for('usuario_email', username=conta.username) }}">
+  <form method="post" action="{{ url_salvar }}">
     <div class="grid">
       <label>Provedor (preset)
         <select name="provedor" id="provedor" onchange="aplicarPreset()">
@@ -69,7 +68,7 @@
       <button type="submit" class="btn btn-primary">Salvar configuração</button>
       {% if cfg %}
       <button type="submit" class="btn btn-danger"
-              formaction="{{ url_for('usuario_email_remover', username=conta.username) }}"
+              formaction="{{ url_remover }}"
               formnovalidate onclick="return confirm('Remover a configuração de e-mail?');">Remover</button>
       {% endif %}
     </div>
@@ -79,7 +78,7 @@
 {% if cfg and cfg.configurado() %}
 <div class="card">
   <h2>Enviar e-mail de teste</h2>
-  <form method="post" action="{{ url_for('usuario_email_testar', username=conta.username) }}" class="form-actions">
+  <form method="post" action="{{ url_testar }}" class="form-actions">
     <label style="max-width:320px;margin:0">Destinatário
       <input type="email" name="destino" value="{{ cfg.remetente_email }}" placeholder="para@exemplo.com">
     </label>

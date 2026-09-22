@@ -46,6 +46,9 @@ PRESETS = {
 }
 SEGURANCAS = ("starttls", "ssl", "nenhuma")
 
+# usuario_id sentinela para o "E-mail Padrão" do sistema (contas reais têm id>=1).
+ID_SISTEMA = 0
+
 
 class EmailError(Exception):
     """Falha ao configurar ou enviar e-mail."""
@@ -145,6 +148,28 @@ class EmailRepository:
     def remover(self, usuario_id: int) -> None:
         self.db.execute("DELETE FROM usuario_email WHERE usuario_id = ?", (usuario_id,))
         self.db.commit()
+
+    # -- E-mail Padrão do sistema (usuario_id sentinela) -------------------
+    def get_padrao(self) -> Optional[ConfigEmail]:
+        return self.get(ID_SISTEMA)
+
+    def salvar_padrao(self, **campos) -> None:
+        self.salvar(ID_SISTEMA, **campos)
+
+    def remover_padrao(self) -> None:
+        self.remover(ID_SISTEMA)
+
+    def resolver(self, usuario_id: Optional[int]) -> Optional[ConfigEmail]:
+        """Remetente a usar: a conta do próprio usuário (se configurada);
+        caso contrário, o E-mail Padrão do sistema; senão ``None``."""
+        if usuario_id:
+            cfg = self.get(usuario_id)
+            if cfg is not None and cfg.configurado():
+                return cfg
+        padrao = self.get_padrao()
+        if padrao is not None and padrao.configurado():
+            return padrao
+        return None
 
 
 def enviar_email(cfg: ConfigEmail, destinatario: str, assunto: str,

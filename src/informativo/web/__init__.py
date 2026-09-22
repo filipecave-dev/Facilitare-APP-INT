@@ -1656,8 +1656,15 @@ def _registrar(app: Flask) -> None:
             flash("Configuração de e-mail salva.", "ok")
             return redirect(url_for("usuario_email", username=conta.username))
         return render_template(
-            "usuario_email.html", conta=conta, cfg=repo.get(conta.id),
+            "usuario_email.html", cfg=repo.get(conta.id),
             presets=PRESETS, segurancas=SEGURANCAS,
+            titulo="E-mail para disparo",
+            subtitulo="Conta de envio do usuário %s%s." % (
+                conta.username, (" (%s)" % conta.nome) if conta.nome else ""),
+            url_voltar=url_for("usuarios"),
+            url_salvar=url_for("usuario_email", username=conta.username),
+            url_remover=url_for("usuario_email_remover", username=conta.username),
+            url_testar=url_for("usuario_email_testar", username=conta.username),
         )
 
     @app.route("/usuarios/<path:username>/email/remover", methods=["POST"])
@@ -1716,11 +1723,12 @@ def _registrar(app: Flask) -> None:
         conta = _conta_gerivel(username)
         principal = _principal()
         repo_email = EmailRepository(_db())
-        # Remetente: a conta de e-mail do próprio Administrador que está enviando.
-        sender = repo_email.get(principal.id) if principal else None
-        if sender is None or not sender.configurado():
-            flash("Configure o e-mail do SEU usuário (remetente) para enviar "
-                  "informações — em Usuários › seu usuário › E-mail.", "erro")
+        # Remetente: o e-mail do próprio Administrador se configurado; senão o
+        # E-mail Padrão do sistema (Configurações › E-mail Padrão).
+        sender = repo_email.resolver(principal.id if principal else None)
+        if sender is None:
+            flash("Nenhum remetente configurado. Defina o e-mail do seu usuário "
+                  "ou o E-mail Padrão do sistema (Configurações › E-mail Padrão).", "erro")
             return redirect(url_for("usuarios"))
         # Destino: e-mail do usuário-alvo (config) ou o próprio username, se for e-mail.
         alvo_cfg = repo_email.get(conta.id)
@@ -1750,6 +1758,72 @@ def _registrar(app: Flask) -> None:
         except EmailError as exc:
             flash(f"Falha ao enviar: {exc}", "erro")
         return redirect(url_for("usuarios"))
+
+    # -- E-mail Padrão do sistema (remetente base, em Configurações) --------
+    @app.route("/configuracoes/email-padrao", methods=["GET", "POST"])
+    @plataforma_obrigatoria
+    def email_padrao():
+        from ..emailer import PRESETS, SEGURANCAS, EmailRepository
+
+        repo = EmailRepository(_db())
+        if request.method == "POST":
+            repo.salvar_padrao(
+                provedor=request.form.get("provedor", "outro"),
+                remetente_nome=request.form.get("remetente_nome") or None,
+                remetente_email=request.form.get("remetente_email") or None,
+                smtp_host=request.form.get("smtp_host") or None,
+                smtp_porta=request.form.get("smtp_porta") or 587,
+                smtp_seguranca=request.form.get("smtp_seguranca") or "starttls",
+                smtp_usuario=request.form.get("smtp_usuario") or None,
+                smtp_senha=request.form.get("smtp_senha") or "",
+                imap_host=request.form.get("imap_host") or None,
+                imap_porta=request.form.get("imap_porta") or 993,
+                imap_ssl=request.form.get("imap_ssl") == "1",
+            )
+            flash("E-mail Padrão do sistema salvo.", "ok")
+            return redirect(url_for("email_padrao"))
+        return render_template(
+            "usuario_email.html", cfg=repo.get_padrao(),
+            presets=PRESETS, segurancas=SEGURANCAS,
+            titulo="E-mail Padrão do sistema",
+            subtitulo="Remetente base para envios do sistema (informações de "
+                      "acesso, comunicados). Usado quando o usuário não tem um "
+                      "e-mail próprio configurado.",
+            url_voltar=url_for("configuracoes"),
+            url_salvar=url_for("email_padrao"),
+            url_remover=url_for("email_padrao_remover"),
+            url_testar=url_for("email_padrao_testar"),
+        )
+
+    @app.route("/configuracoes/email-padrao/remover", methods=["POST"])
+    @plataforma_obrigatoria
+    def email_padrao_remover():
+        from ..emailer import EmailRepository
+
+        EmailRepository(_db()).remover_padrao()
+        flash("E-mail Padrão removido.", "ok")
+        return redirect(url_for("email_padrao"))
+
+    @app.route("/configuracoes/email-padrao/testar", methods=["POST"])
+    @plataforma_obrigatoria
+    def email_padrao_testar():
+        from ..emailer import EmailError, EmailRepository, enviar_email
+
+        cfg = EmailRepository(_db()).get_padrao()
+        if cfg is None or not cfg.configurado():
+            flash("Configure o SMTP (host, remetente e usuário) antes de testar.", "erro")
+            return redirect(url_for("email_padrao"))
+        destino = request.form.get("destino") or cfg.remetente_email
+        try:
+            enviar_email(
+                cfg, destino, "Teste — E-mail Padrão do Informativo",
+                "<p>✅ O <strong>E-mail Padrão</strong> do sistema está funcionando.</p>",
+                "E-mail Padrao do sistema funcionando (teste do Informativo).",
+            )
+            flash(f"E-mail de teste enviado para {destino}.", "ok")
+        except EmailError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("email_padrao"))
 
     # -- Configurações: hub que reúne os módulos administrativos -------------
     @app.route("/configuracoes")

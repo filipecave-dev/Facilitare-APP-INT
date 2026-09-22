@@ -53,6 +53,11 @@
   {% endif %}
 
   {% if is_plataforma and perfil == 'Administrador' %}
+  <a class="card hub" href="{{ url_for('email_padrao') }}">
+    <span class="hub-ic">✉️</span>
+    <span class="hub-tt">E-mail Padrão</span>
+    <span class="muted">Remetente base do sistema (envio de acessos e comunicados).</span>
+  </a>
   <a class="card hub" href="{{ url_for('curadoria') }}">
     <span class="hub-ic">🔎</span>
     <span class="hub-tt">Curadoria</span>

@@ -48,6 +48,25 @@ def test_repo_salvar_get_remover_preserva_senha(db):
     assert repo.get(u.id) is None
 
 
+def test_email_padrao_e_resolver(db):
+    u = UsuarioRepository(db).criar("ana", "senhaforte", "Editor")
+    repo = EmailRepository(db)
+    # sem nada configurado -> resolver devolve None
+    assert repo.resolver(u.id) is None
+    # com E-mail Padrão do sistema -> resolver cai no padrão
+    repo.salvar_padrao(provedor="google", remetente_email="sistema@x.com",
+                       smtp_host="smtp.gmail.com", smtp_usuario="sistema@x.com",
+                       smtp_senha="seg")
+    assert repo.resolver(u.id).remetente_email == "sistema@x.com"
+    # usuário com e-mail próprio -> resolver prefere o do usuário
+    repo.salvar(u.id, provedor="microsoft", remetente_email="ana@x.com",
+                smtp_host="smtp.office365.com", smtp_usuario="ana@x.com",
+                smtp_senha="p")
+    assert repo.resolver(u.id).remetente_email == "ana@x.com"
+    # o padrão não colide com contas reais
+    assert repo.get_padrao().remetente_email == "sistema@x.com"
+
+
 def test_enviar_email_incompleto_levanta(db):
     cfg = ConfigEmail(usuario_id=1)  # sem host/remetente
     with pytest.raises(EmailError):
