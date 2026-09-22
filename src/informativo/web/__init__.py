@@ -1621,6 +1621,136 @@ def _registrar(app: Flask) -> None:
             flash(str(exc), "erro")
         return redirect(url_for("usuarios"))
 
+    # -- Usuários: e-mail (disparo) + submenu (senha, envio de informações) --
+    def _conta_gerivel(username: str):
+        """Retorna a conta se o principal pode geri-la; senão aborta."""
+        conta = UsuarioRepository(_db()).get((username or "").strip().lower())
+        if conta is None:
+            abort(404)
+        if not _pode_gerir_usuario(_principal(), conta):
+            abort(403)
+        return conta
+
+    @app.route("/usuarios/<path:username>/email", methods=["GET", "POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuario_email(username: str):
+        from ..emailer import PRESETS, SEGURANCAS, EmailRepository
+
+        conta = _conta_gerivel(username)
+        repo = EmailRepository(_db())
+        if request.method == "POST":
+            repo.salvar(
+                conta.id,
+                provedor=request.form.get("provedor", "outro"),
+                remetente_nome=request.form.get("remetente_nome") or None,
+                remetente_email=request.form.get("remetente_email") or None,
+                smtp_host=request.form.get("smtp_host") or None,
+                smtp_porta=request.form.get("smtp_porta") or 587,
+                smtp_seguranca=request.form.get("smtp_seguranca") or "starttls",
+                smtp_usuario=request.form.get("smtp_usuario") or None,
+                smtp_senha=request.form.get("smtp_senha") or "",
+                imap_host=request.form.get("imap_host") or None,
+                imap_porta=request.form.get("imap_porta") or 993,
+                imap_ssl=request.form.get("imap_ssl") == "1",
+            )
+            flash("Configuração de e-mail salva.", "ok")
+            return redirect(url_for("usuario_email", username=conta.username))
+        return render_template(
+            "usuario_email.html", conta=conta, cfg=repo.get(conta.id),
+            presets=PRESETS, segurancas=SEGURANCAS,
+        )
+
+    @app.route("/usuarios/<path:username>/email/remover", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuario_email_remover(username: str):
+        from ..emailer import EmailRepository
+
+        conta = _conta_gerivel(username)
+        EmailRepository(_db()).remover(conta.id)
+        flash("Configuração de e-mail removida.", "ok")
+        return redirect(url_for("usuario_email", username=conta.username))
+
+    @app.route("/usuarios/<path:username>/email/testar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuario_email_testar(username: str):
+        from ..emailer import EmailError, EmailRepository, enviar_email
+
+        conta = _conta_gerivel(username)
+        cfg = EmailRepository(_db()).get(conta.id)
+        if cfg is None or not cfg.configurado():
+            flash("Configure o SMTP (host, remetente e usuário) antes de testar.", "erro")
+            return redirect(url_for("usuario_email", username=conta.username))
+        destino = request.form.get("destino") or cfg.remetente_email
+        try:
+            enviar_email(
+                cfg, destino, "Teste de e-mail — Informativo",
+                "<p>✅ Configuração de e-mail funcionando. Este é um teste do "
+                "sistema <strong>Informativo</strong>.</p>",
+                "Configuracao de e-mail funcionando (teste do Informativo).",
+            )
+            flash(f"E-mail de teste enviado para {destino}.", "ok")
+        except EmailError as exc:
+            flash(str(exc), "erro")
+        return redirect(url_for("usuario_email", username=conta.username))
+
+    @app.route("/usuarios/<path:username>/senha-aleatoria", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuario_senha_aleatoria(username: str):
+        from ..emailer import gerar_senha
+
+        conta = _conta_gerivel(username)
+        nova = gerar_senha(12)
+        UsuarioRepository(_db()).redefinir_senha(conta.username, nova)
+        # Mostra a senha uma única vez para o admin repassar com segurança.
+        flash(f"Nova senha de '{conta.username}': {nova} — anote e repasse com "
+              "segurança (não será exibida novamente).", "ok")
+        return redirect(url_for("usuarios"))
+
+    @app.route("/usuarios/<path:username>/enviar-info", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def usuario_enviar_info(username: str):
+        from ..emailer import (
+            EmailError, EmailRepository, enviar_email, gerar_senha,
+        )
+
+        conta = _conta_gerivel(username)
+        principal = _principal()
+        repo_email = EmailRepository(_db())
+        # Remetente: a conta de e-mail do próprio Administrador que está enviando.
+        sender = repo_email.get(principal.id) if principal else None
+        if sender is None or not sender.configurado():
+            flash("Configure o e-mail do SEU usuário (remetente) para enviar "
+                  "informações — em Usuários › seu usuário › E-mail.", "erro")
+            return redirect(url_for("usuarios"))
+        # Destino: e-mail do usuário-alvo (config) ou o próprio username, se for e-mail.
+        alvo_cfg = repo_email.get(conta.id)
+        destino = (request.form.get("destino")
+                   or (alvo_cfg.remetente_email if alvo_cfg else None)
+                   or (conta.username if "@" in conta.username else None))
+        if not destino:
+            flash("Sem e-mail de destino: informe um e-mail ou configure o do usuário.", "erro")
+            return redirect(url_for("usuarios"))
+        # Gera uma senha temporária e envia os dados de acesso.
+        nova = gerar_senha(12)
+        UsuarioRepository(_db()).redefinir_senha(conta.username, nova)
+        url_login = url_for("login", _external=True)
+        html = (
+            f"<p>Olá{(' ' + conta.nome) if conta.nome else ''},</p>"
+            "<p>Seu acesso ao sistema <strong>Informativo</strong> foi configurado:</p>"
+            f"<ul><li><strong>Endereço:</strong> <a href='{url_login}'>{url_login}</a></li>"
+            f"<li><strong>Usuário:</strong> {conta.username}</li>"
+            f"<li><strong>Senha temporária:</strong> {nova}</li></ul>"
+            "<p>Recomendamos trocar a senha no primeiro acesso.</p>"
+        )
+        try:
+            enviar_email(sender, destino,
+                         "Seus dados de acesso — Informativo", html,
+                         f"Usuario: {conta.username} | Senha temporaria: {nova} | {url_login}")
+            flash(f"Informações de acesso enviadas para {destino}.", "ok")
+        except EmailError as exc:
+            flash(f"Falha ao enviar: {exc}", "erro")
+        return redirect(url_for("usuarios"))
+
     # -- Configurações: hub que reúne os módulos administrativos -------------
     @app.route("/configuracoes")
     @login_obrigatorio

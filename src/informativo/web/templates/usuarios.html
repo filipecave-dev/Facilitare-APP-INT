@@ -71,22 +71,42 @@
           </td>
           <td>{% if c.ativo %}<span class="pill on">Ativo</span>{% else %}<span class="pill off">Inativo</span>{% endif %}</td>
           <td>
-            {% if c.username != principal.username %}
-            <form class="inline-form" method="post" action="{{ url_for('usuarios_personificar') }}">
-              <input type="hidden" name="username" value="{{ c.username }}">
-              <button type="submit" class="btn btn-sm" {{ 'disabled title=\"Usuário inativo\"' if not c.ativo }}>Personificar</button>
-            </form>
-            <form class="inline-form" method="post" action="{{ url_for('usuarios_alternar') }}">
-              <input type="hidden" name="username" value="{{ c.username }}">
-              <button type="submit" class="btn btn-sm">{{ 'Desativar' if c.ativo else 'Ativar' }}</button>
-            </form>
-            {% endif %}
-            <form class="inline-form" method="post" action="{{ url_for('usuarios_senha') }}"
-                  onsubmit="var s=this.senha.value; if(!s||s.length<8){alert('A senha deve ter ao menos 8 caracteres.');return false;} return confirm('Redefinir a senha de {{ c.username }}?');">
-              <input type="password" name="senha" placeholder="nova senha" style="width:130px" minlength="8">
-              <input type="hidden" name="username" value="{{ c.username }}">
-              <button type="submit" class="btn btn-sm">Redefinir senha</button>
-            </form>
+            <a class="btn btn-sm btn-primary" href="{{ url_for('usuario_email', username=c.username) }}">E-mail</a>
+            <details class="menu-acoes" style="display:inline-block;position:relative">
+              <summary class="btn btn-sm" style="list-style:none;cursor:pointer">Ações ▾</summary>
+              <div style="position:absolute;right:0;z-index:10;background:var(--card);border:1px solid var(--border);
+                   border-radius:8px;box-shadow:0 6px 18px rgba(20,30,50,.14);padding:10px;min-width:230px;text-align:left">
+                {% if c.username != principal.username %}
+                <form class="inline-form" method="post" action="{{ url_for('usuarios_personificar') }}" style="display:block;margin-bottom:6px">
+                  <input type="hidden" name="username" value="{{ c.username }}">
+                  <button type="submit" class="btn btn-sm" style="width:100%" {{ 'disabled' if not c.ativo }}>Personificar</button>
+                </form>
+                <form class="inline-form" method="post" action="{{ url_for('usuarios_alternar') }}" style="display:block;margin-bottom:6px">
+                  <input type="hidden" name="username" value="{{ c.username }}">
+                  <button type="submit" class="btn btn-sm" style="width:100%">{{ 'Desativar' if c.ativo else 'Ativar' }}</button>
+                </form>
+                {% endif %}
+                <form class="inline-form" method="post" action="{{ url_for('usuario_enviar_info', username=c.username) }}"
+                      style="display:block;margin-bottom:6px"
+                      onsubmit="return confirm('Gerar senha temporária e ENVIAR os dados de acesso por e-mail para {{ c.username }}?');">
+                  <button type="submit" class="btn btn-sm" style="width:100%">✉️ Enviar informações</button>
+                </form>
+                <hr style="border:none;border-top:1px solid var(--border);margin:8px 0">
+                <div class="muted" style="font-size:12px;margin-bottom:4px">Redefinir senha</div>
+                <form class="inline-form" method="post" action="{{ url_for('usuarios_senha') }}"
+                      style="display:flex;gap:4px;margin-bottom:6px"
+                      onsubmit="var s=this.senha.value; if(!s||s.length<8){alert('Mínimo 8 caracteres.');return false;} return confirm('Redefinir a senha de {{ c.username }}?');">
+                  <input type="password" name="senha" placeholder="nova senha" style="flex:1;min-width:0" minlength="8">
+                  <input type="hidden" name="username" value="{{ c.username }}">
+                  <button type="submit" class="btn btn-sm">OK</button>
+                </form>
+                <form class="inline-form" method="post" action="{{ url_for('usuario_senha_aleatoria', username=c.username) }}"
+                      style="display:block"
+                      onsubmit="return confirm('Gerar uma senha aleatória para {{ c.username }}? Ela será exibida uma vez.');">
+                  <button type="submit" class="btn btn-sm" style="width:100%">🎲 Gerar senha aleatória</button>
+                </form>
+              </div>
+            </details>
           </td>
         </tr>
         {% endfor %}

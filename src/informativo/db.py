@@ -115,6 +115,23 @@ CREATE TABLE IF NOT EXISTS configuracoes (
     valor TEXT
 );
 
+CREATE TABLE IF NOT EXISTS usuario_email (
+    id             {pk},
+    usuario_id     INTEGER NOT NULL,
+    provedor       TEXT,
+    remetente_nome TEXT,
+    remetente_email TEXT,
+    smtp_host      TEXT,
+    smtp_porta     INTEGER,
+    smtp_seguranca TEXT,
+    smtp_usuario   TEXT,
+    smtp_senha     TEXT,
+    imap_host      TEXT,
+    imap_porta     INTEGER,
+    imap_ssl       INTEGER NOT NULL DEFAULT 1,
+    atualizado_em  TEXT
+);
+
 CREATE TABLE IF NOT EXISTS uso_ia (
     id         {pk},
     dia        TEXT,

@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block title %}E-mail de {{ conta.username }} — Informativo{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>E-mail para disparo</h1>
+    <p class="muted">Conta de envio do usuário <strong>{{ conta.username }}</strong>
+      {% if conta.nome %}({{ conta.nome }}){% endif %}. Funciona com qualquer provedor —
+      Google, Microsoft ou servidor próprio (SMTP/IMAP).</p>
+  </div>
+  <a class="btn" href="{{ url_for('usuarios') }}">← Usuários</a>
+</div>
+
+<div class="card">
+  <form method="post" action="{{ url_for('usuario_email', username=conta.username) }}">
+    <div class="grid">
+      <label>Provedor (preset)
+        <select name="provedor" id="provedor" onchange="aplicarPreset()">
+          {% for chave, p in presets.items() %}
+          <option value="{{ chave }}" {{ 'selected' if (cfg.provedor if cfg else 'outro') == chave }}>{{ p.rotulo }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Nome do remetente
+        <input type="text" name="remetente_nome" value="{{ cfg.remetente_nome if cfg else '' }}" placeholder="Ex.: Boletim Tivolitur">
+      </label>
+      <label>E-mail do remetente (De:)
+        <input type="email" name="remetente_email" value="{{ cfg.remetente_email if cfg else '' }}" placeholder="disparos@empresa.com">
+      </label>
+    </div>
+
+    <h2 style="margin-top:14px">Envio (SMTP)</h2>
+    <div class="grid">
+      <label>Servidor SMTP
+        <input type="text" name="smtp_host" id="smtp_host" value="{{ cfg.smtp_host if cfg else '' }}" placeholder="smtp.gmail.com">
+      </label>
+      <label>Porta
+        <input type="number" name="smtp_porta" id="smtp_porta" value="{{ cfg.smtp_porta if cfg else 587 }}" min="1" max="65535">
+      </label>
+      <label>Segurança
+        <select name="smtp_seguranca" id="smtp_seguranca">
+          {% set seg = cfg.smtp_seguranca if cfg else 'starttls' %}
+          <option value="starttls" {{ 'selected' if seg == 'starttls' }}>STARTTLS (587)</option>
+          <option value="ssl" {{ 'selected' if seg == 'ssl' }}>SSL/TLS (465)</option>
+          <option value="nenhuma" {{ 'selected' if seg == 'nenhuma' }}>Nenhuma</option>
+        </select>
+      </label>
+      <label>Usuário SMTP
+        <input type="text" name="smtp_usuario" value="{{ cfg.smtp_usuario if cfg else '' }}" placeholder="normalmente o e-mail completo" autocomplete="off">
+      </label>
+      <label>Senha SMTP {% if cfg and cfg.smtp_senha %}<span class="muted">(preenchida — deixe em branco p/ manter)</span>{% endif %}
+        <input type="password" name="smtp_senha" placeholder="••••••••" autocomplete="new-password">
+      </label>
+    </div>
+    <p class="help" id="ajuda-preset"></p>
+
+    <h2 style="margin-top:14px">Leitura (IMAP) — opcional</h2>
+    <div class="grid">
+      <label>Servidor IMAP
+        <input type="text" name="imap_host" id="imap_host" value="{{ cfg.imap_host if cfg else '' }}" placeholder="imap.gmail.com">
+      </label>
+      <label>Porta IMAP
+        <input type="number" name="imap_porta" id="imap_porta" value="{{ cfg.imap_porta if cfg else 993 }}" min="1" max="65535">
+      </label>
+      <label class="check"><input type="checkbox" name="imap_ssl" value="1" {{ 'checked' if (cfg.imap_ssl if cfg else True) }}> IMAP com SSL</label>
+    </div>
+
+    <div class="form-actions" style="margin-top:16px">
+      <button type="submit" class="btn btn-primary">Salvar configuração</button>
+      {% if cfg %}
+      <button type="submit" class="btn btn-danger"
+              formaction="{{ url_for('usuario_email_remover', username=conta.username) }}"
+              formnovalidate onclick="return confirm('Remover a configuração de e-mail?');">Remover</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if cfg and cfg.configurado() %}
+<div class="card">
+  <h2>Enviar e-mail de teste</h2>
+  <form method="post" action="{{ url_for('usuario_email_testar', username=conta.username) }}" class="form-actions">
+    <label style="max-width:320px;margin:0">Destinatário
+      <input type="email" name="destino" value="{{ cfg.remetente_email }}" placeholder="para@exemplo.com">
+    </label>
+    <button type="submit" class="btn">Enviar teste</button>
+  </form>
+</div>
+{% endif %}
+
+<script>
+  var PRESETS = {
+    {% for chave, p in presets.items() %}
+    "{{ chave }}": {host:"{{ p.smtp_host }}", porta:{{ p.smtp_porta }}, seg:"{{ p.smtp_seguranca }}",
+                    imap:"{{ p.imap_host }}", imapp:{{ p.imap_porta }}, ajuda:"{{ p.ajuda }}"},
+    {% endfor %}
+  };
+  function aplicarPreset() {
+    var k = document.getElementById('provedor').value;
+    var p = PRESETS[k]; if (!p) return;
+    document.getElementById('ajuda-preset').textContent = p.ajuda || '';
+    if (k === 'outro') return; // não sobrescreve dados próprios
+    document.getElementById('smtp_host').value = p.host;
+    document.getElementById('smtp_porta').value = p.porta;
+    document.getElementById('smtp_seguranca').value = p.seg;
+    document.getElementById('imap_host').value = p.imap;
+    document.getElementById('imap_porta').value = p.imapp;
+  }
+  // Só mostra a ajuda ao carregar (não sobrescreve valores já salvos).
+  document.getElementById('ajuda-preset').textContent =
+    (PRESETS[document.getElementById('provedor').value] || {}).ajuda || '';
+</script>
+{% endblock %}
