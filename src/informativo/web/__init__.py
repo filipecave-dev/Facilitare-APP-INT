@@ -81,9 +81,10 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         from ..plano import CFG_DB_INICIO, DATA_INICIO_OPERACAO, garantir_inicio
 
         garantir_inicio(sett)
-        if sett.get("db_free_inicio_ajustado") != "1":
+        # v2: reaplica com data+hora (o ajuste anterior gravou só a data).
+        if sett.get("db_free_inicio_ajustado_v2") != "1":
             sett.set(CFG_DB_INICIO, DATA_INICIO_OPERACAO)
-            sett.set("db_free_inicio_ajustado", "1")
+            sett.set("db_free_inicio_ajustado_v2", "1")
         # Ajuste único: conexões Gemini legadas passam a usar o modelo
         # econômico gemini-2.5-flash-lite.
         if sett.get("gemini_25_flash_lite") != "1":

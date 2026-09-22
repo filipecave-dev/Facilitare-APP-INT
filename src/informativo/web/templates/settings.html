@@ -75,9 +75,9 @@
        Informe a <strong>data em que o banco foi conectado</strong> e o total de
        dias gratuitos — a tela inicial mostra o regressivo ao Administrador.</p>
     <div class="grid">
-      <label>Data de início (conexão do banco)
-        <input type="date" name="db_free_inicio"
-               value="{{ plano_bd.inicio.isoformat() if plano_bd else '' }}">
+      <label>Início — data e hora, UTC (conexão do banco)
+        <input type="datetime-local" name="db_free_inicio"
+               value="{{ plano_bd.inicio.strftime('%Y-%m-%dT%H:%M') if plano_bd else '' }}">
       </label>
       <label>Dias gratuitos
         <input type="number" name="db_free_dias" min="1" max="365"
@@ -85,9 +85,9 @@
       </label>
     </div>
     {% if plano_bd %}
-    <p class="help">Expira em <strong>{{ plano_bd.expira.strftime('%d/%m/%Y') }}</strong> —
-      {% if plano_bd.expirado %}<span style="color:#b42318">prazo esgotado há {{ -plano_bd.restantes }} dia(s)</span>
-      {% else %}faltam <strong>{{ plano_bd.restantes }}</strong> dia(s){% endif %}.</p>
+    <p class="help">Expira em <strong>{{ plano_bd.expira.strftime('%d/%m/%Y %H:%M') }} (UTC)</strong> —
+      {% if plano_bd.expirado %}<span style="color:#b42318">prazo esgotado há {{ plano_bd.atraso_dias }} dia(s)</span>
+      {% else %}faltam <strong>{{ plano_bd.restantes_dias }} dia(s) e {{ plano_bd.restantes_horas }} hora(s)</strong>{% endif %}.</p>
     {% endif %}
   </div>
 

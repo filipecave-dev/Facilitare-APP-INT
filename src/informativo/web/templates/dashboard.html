@@ -14,24 +14,26 @@
 </div>
 
 {% if plano_bd %}
-{% set cor_bd = '#b42318' if (plano_bd.expirado or plano_bd.restantes <= 3) else ('#d4a017' if plano_bd.alerta else '#1f9d57') %}
+{% set cor_bd = '#b42318' if (plano_bd.expirado or plano_bd.restantes_dias <= 3) else ('#d4a017' if plano_bd.alerta else '#1f9d57') %}
 <div class="card" style="border-left:5px solid {{ cor_bd }};display:flex;align-items:center;
      justify-content:space-between;gap:16px;flex-wrap:wrap">
   <div style="display:flex;align-items:center;gap:16px">
-    <div style="text-align:center;min-width:96px">
-      <div style="font-size:34px;font-weight:800;line-height:1;color:{{ cor_bd }}">
-        {{ plano_bd.restantes if not plano_bd.expirado else 0 }}</div>
-      <div class="muted" style="font-size:12px">dia(s) restante(s)</div>
+    <div style="text-align:center;min-width:120px">
+      <div style="font-size:32px;font-weight:800;line-height:1;color:{{ cor_bd }}">
+        {{ plano_bd.restantes_dias }}<span style="font-size:16px">d</span>
+        {{ '%02d'|format(plano_bd.restantes_horas) }}<span style="font-size:16px">h</span></div>
+      <div class="muted" style="font-size:12px">restante(s)</div>
     </div>
     <div>
       <strong>Plano gratuito do banco (Render)</strong>
       {% if plano_bd.expirado %}
-      <p class="muted" style="margin:2px 0 0;color:#b42318">Prazo esgotado em
-        {{ plano_bd.expira.strftime('%d/%m/%Y') }} — migre para o plano pago para não perder dados.</p>
+      <p class="muted" style="margin:2px 0 0;color:#b42318">Prazo esgotado há
+        {{ plano_bd.atraso_dias }} dia(s) — expirou em {{ plano_bd.expira.strftime('%d/%m/%Y %H:%M') }} (UTC).
+        Migre para o plano pago para não perder dados.</p>
       {% else %}
       <p class="muted" style="margin:2px 0 0">Gratuito por {{ plano_bd.dias_total }} dias desde
-        {{ plano_bd.inicio.strftime('%d/%m/%Y') }} · expira em
-        <strong>{{ plano_bd.expira.strftime('%d/%m/%Y') }}</strong>.</p>
+        {{ plano_bd.inicio.strftime('%d/%m/%Y %H:%M') }} · expira em
+        <strong>{{ plano_bd.expira.strftime('%d/%m/%Y %H:%M') }}</strong> (UTC).</p>
       {% endif %}
       <div style="background:#eef1f6;border-radius:6px;height:8px;overflow:hidden;margin-top:6px;width:min(360px,60vw)">
         <div style="height:100%;width:{{ plano_bd.pct }}%;background:{{ cor_bd }}"></div>
