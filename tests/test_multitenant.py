@@ -48,6 +48,40 @@ def test_isolamento_de_captacoes(app):
     assert b"CONTEUDO DA B" not in resp.data  # não vê a da outra empresa
 
 
+def test_painel_isola_resultados_por_empresa(app):
+    """Usuário vinculado a uma empresa vê no painel só os dados dela; o
+    Administrador da plataforma vê tudo e pode filtrar por empresa."""
+    with Database(app.config["DSN"]) as db:
+        a = EmpresaRepository(db).obter_ou_criar("Tivolitur")
+        b = EmpresaRepository(db).criar("Bortoluzzi Mourao")
+        f = FonteRepository(db).listar()[0]
+        cap = CaptacaoRepository(db)
+        # textos bem distintos p/ não colidir com a deduplicação
+        for t in ("Alfa greve aeroporto Guarulhos hoje",
+                  "Beta enchente litoral norte agora"):
+            cap.registrar(f, t + " Tivolitur", provedor="X", empresa_id=a.id)
+        for t in ("Gama feira gastronomia centro cidade",
+                  "Delta congresso mercado imobiliario nacional",
+                  "Epsilon rodovia interditada serra montanha"):
+            cap.registrar(f, t + " Bortoluzzi", provedor="X", empresa_id=b.id)
+        UsuarioRepository(db).criar("filipe", "senha12345", "Editor", empresa_id=a.id)
+
+        cap_a = cap.metricas(empresa_id=a.id, somente_empresa=True)["captadas"]
+        cap_b = cap.metricas(empresa_id=b.id, somente_empresa=True)["captadas"]
+        cap_tudo = cap.metricas()["captadas"]
+    assert cap_a == 2 and cap_b == 3 and cap_tudo == 5
+
+    # Usuário da Tivolitur: painel só com dados da Tivolitur, sem controles de plataforma
+    c = _login(app, "filipe", "senha12345")
+    dash = c.get("/dashboard").data
+    assert b"Bortoluzzi" not in dash
+    assert b"Filtrar por empresa" not in dash  # sem seletor de plataforma
+    # e a curva ABC também é escopada (só a fonte usada pela Tivolitur, se houver)
+    cap_view = c.get("/captacao?status=pendente").data
+    assert b"Tivolitur" in cap_view and b"Bortoluzzi" not in cap_view
+    assert b"Atribuir empresa" not in cap_view  # sem atribuição em massa (plataforma)
+
+
 def test_editor_nao_altera_provedor_global(app):
     with Database(app.config["DSN"]) as db:
         a = EmpresaRepository(db).criar("Empresa A")
