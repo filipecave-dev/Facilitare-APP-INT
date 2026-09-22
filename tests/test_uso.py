@@ -63,6 +63,30 @@ def test_sem_limite_nunca_bloqueia(db):
     assert excede_limite(uso, precos) is False
 
 
+def test_curva_abc_por_fonte(db):
+    precos = Precos(SettingsRepository(db))
+    uso = UsoRepository(db)
+    # Fonte grande domina o consumo (classe A); duas pequenas (B/C).
+    uso.registrar("captura", {"in": 90000, "out": 10000}, precos.custo(90000, 10000),
+                  fonte_id=1, fonte_nome="Reuters")
+    uso.registrar("captura", {"in": 6000, "out": 2000}, precos.custo(6000, 2000),
+                  fonte_id=2, fonte_nome="G1")
+    uso.registrar("parafrase", {"in": 1500, "out": 500}, precos.custo(1500, 500),
+                  fonte_id=3, fonte_nome="CNN")
+    abc = uso.curva_abc()
+    itens = abc["itens"]
+    assert [i["fonte_nome"] for i in itens] == ["Reuters", "G1", "CNN"]  # ordenado desc
+    assert itens[0]["classe"] == "A"  # Reuters concentra o consumo
+    # acumulado termina em ~100%
+    assert round(itens[-1]["pct_acumulado"], 3) == 1.0
+    # totais coerentes
+    assert abc["totais"]["tokens"] == 100000 + 8000 + 2000
+    assert abc["totais"]["fontes"] == 3
+    # classes somam todas as fontes
+    somaf = sum(abc["classes"][c]["fontes"] for c in ("A", "B", "C"))
+    assert somaf == 3
+
+
 def test_resumo_do_dia_tem_resta(db):
     settings = SettingsRepository(db)
     settings.set(CFG_LIMITE_DIA, "1.00")

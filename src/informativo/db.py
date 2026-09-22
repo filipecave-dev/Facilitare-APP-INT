@@ -121,6 +121,8 @@ CREATE TABLE IF NOT EXISTS uso_ia (
     empresa_id INTEGER,
     provedor   TEXT,
     operacao   TEXT,
+    fonte_id   INTEGER,
+    fonte_nome TEXT,
     tokens_in  INTEGER NOT NULL DEFAULT 0,
     tokens_out INTEGER NOT NULL DEFAULT 0,
     custo      REAL    NOT NULL DEFAULT 0,
@@ -285,3 +287,5 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "empresas", "logo_nome", "TEXT")
     _garantir_coluna(db, "empresas", "logo_mime", "TEXT")
     _garantir_coluna(db, "empresas", "logo_dados", "TEXT")
+    _garantir_coluna(db, "uso_ia", "fonte_id", "INTEGER")
+    _garantir_coluna(db, "uso_ia", "fonte_nome", "TEXT")

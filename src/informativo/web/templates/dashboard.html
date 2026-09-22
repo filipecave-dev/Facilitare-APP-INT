@@ -147,4 +147,67 @@
   </div>
 
 </div>
+
+{# ---- Curva ABC de tokens por fonte (Pareto) ---- #}
+<div class="card">
+  <div class="page-head" style="margin-bottom:10px">
+    <div>
+      <h2 style="margin:0">Curva ABC de tokens por fonte</h2>
+      <p class="muted" style="margin:2px 0 0">Onde o consumo se concentra — foque as fontes
+        <strong>A</strong> para otimizar custo. Total: {{ '{:,}'.format(abc.totais.tokens).replace(',', '.') }} tokens
+        · {{ uso.moeda }} {{ '%.4f'|format(abc.totais.custo) }}.</p>
+    </div>
+  </div>
+
+  {% if abc.itens %}
+  {% set cores = {'A':'#1f9d57','B':'#d4a017','C':'#b42318'} %}
+  {# Resumo por classe #}
+  <div class="cards" style="margin-bottom:14px">
+    {% for cl in ['A','B','C'] %}
+    {% set c = abc.classes[cl] %}
+    {% set pct = (c.tokens / abc.totais.tokens * 100) if abc.totais.tokens else 0 %}
+    <div class="card stat" style="border-left:4px solid {{ cores[cl] }}">
+      <span class="num" style="color:{{ cores[cl] }}">{{ cl }}</span>
+      <span class="lbl">{{ c.fontes }} fonte(s) · {{ '%.0f'|format(pct) }}% dos tokens
+        · {{ uso.moeda }} {{ '%.4f'|format(c.custo) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+
+  {# Pareto: barra de tokens + acumulado #}
+  {% set maxpct = abc.itens[0].pct or 1 %}
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Fonte</th><th>Classe</th><th>Chamadas</th><th>Tokens</th>
+          <th>% do total</th><th>% acumulado</th><th style="min-width:160px">Participação</th></tr>
+      </thead>
+      <tbody>
+        {% for it in abc.itens %}
+        <tr>
+          <td class="muted">{{ loop.index }}</td>
+          <td>{{ it.fonte_nome }}</td>
+          <td><span class="pill" style="background:{{ cores[it.classe] }};color:#fff">{{ it.classe }}</span></td>
+          <td>{{ it.chamadas }}</td>
+          <td>{{ '{:,}'.format(it.tokens).replace(',', '.') }}</td>
+          <td>{{ '%.1f'|format(it.pct * 100) }}%</td>
+          <td>{{ '%.1f'|format(it.pct_acumulado * 100) }}%</td>
+          <td>
+            <div style="background:#eef1f6;border-radius:6px;height:12px;overflow:hidden;position:relative">
+              <div style="height:100%;width:{{ (it.pct / maxpct * 100) | round(1) }}%;background:{{ cores[it.classe] }}"></div>
+              <span title="acumulado" style="position:absolute;top:-3px;left:calc({{ (it.pct_acumulado * 100) | round(1) }}% - 1px);
+                    width:2px;height:18px;background:#1c2431"></span>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="help">A régua escura marca o <strong>% acumulado</strong> (Pareto). Classe A ≈ até 80%,
+     B ≈ 80–95%, C ≈ 95–100% do consumo de tokens.</p>
+  {% else %}
+  <p class="muted">Sem consumo de IA registrado ainda. Rode uma captação ou gere paráfrases para ver a curva ABC.</p>
+  {% endif %}
+</div>
 {% endblock %}

@@ -318,9 +318,11 @@ def _registrar(app: Flask) -> None:
             somente = True
 
         m = cap_repo.metricas(empresa_id=filtro_empresa, somente_empresa=somente)
-        uso = UsoRepository(_db()).resumo_do_dia(
+        uso_repo = UsoRepository(_db())
+        uso = uso_repo.resumo_do_dia(
             Precos(SettingsRepository(_db())),
             empresa_id=filtro_empresa, somente_empresa=somente)
+        abc = uso_repo.curva_abc(empresa_id=filtro_empresa, somente_empresa=somente)
         empresa = None
         empresa_alvo = filtro_empresa if plataforma else principal.empresa_id
         if empresa_alvo is not None:
@@ -335,6 +337,7 @@ def _registrar(app: Flask) -> None:
             empresa=empresa,
             m=m,
             uso=uso,
+            abc=abc,
             top_fontes=cap_repo.top_fontes(8, empresa_id=filtro_empresa, somente_empresa=somente),
             fontes_fracas=cap_repo.fontes_sem_relevancia(8, empresa_id=filtro_empresa, somente_empresa=somente),
             por_frente=cap_repo.por_frente(empresa_id=filtro_empresa, somente_empresa=somente),
@@ -852,7 +855,8 @@ def _registrar(app: Flask) -> None:
                 texto, uso = cli.chat_uso(prompt, system=system, max_tokens=380)
                 custo = precos.custo(uso["in"], uso["out"])
                 uso_repo.registrar("captura", uso, custo,
-                                   empresa_id=principal.empresa_id, provedor=provedor.nome)
+                                   empresa_id=principal.empresa_id, provedor=provedor.nome,
+                                   fonte_id=fonte.id, fonte_nome=fonte.nome)
                 novo = repo_cap.registrar(fonte, texto, provedor=provedor.nome,
                                           empresa_id=principal.empresa_id)
                 if novo is None:
@@ -1016,7 +1020,8 @@ def _registrar(app: Flask) -> None:
         try:
             texto, uso = provedor.cliente().chat_uso(prompt, system=system)
             uso_repo.registrar("parafrase", uso, precos.custo(uso["in"], uso["out"]),
-                               empresa_id=cap.get("empresa_id"), provedor=provedor.nome)
+                               empresa_id=cap.get("empresa_id"), provedor=provedor.nome,
+                               fonte_id=cap.get("fonte_id"), fonte_nome=cap.get("fonte_nome"))
             repo.definir_parafrase(cid, texto)
             flash(f"Paráfrase gerada via '{provedor.nome}'.", "ok")
         except IAError as exc:
@@ -1133,7 +1138,8 @@ def _registrar(app: Flask) -> None:
             try:
                 texto, uso = cli.chat_uso(prompt, system=system)
                 uso_repo.registrar("parafrase", uso, precos.custo(uso["in"], uso["out"]),
-                                   empresa_id=c.get("empresa_id"), provedor=provedor.nome)
+                                   empresa_id=c.get("empresa_id"), provedor=provedor.nome,
+                                   fonte_id=c.get("fonte_id"), fonte_nome=c.get("fonte_nome"))
                 repo.definir_parafrase(c["id"], texto)
                 ok += 1
             except IAError as exc:

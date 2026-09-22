@@ -59,15 +59,81 @@ class UsoRepository:
         self.db = db
 
     def registrar(self, operacao: str, uso: dict, custo: float, *,
-                  empresa_id=None, provedor: str = None) -> None:
+                  empresa_id=None, provedor: str = None,
+                  fonte_id=None, fonte_nome: str = None) -> None:
         self.db.insert(
-            "INSERT INTO uso_ia (dia, empresa_id, provedor, operacao, tokens_in, "
-            "tokens_out, custo, criado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (_hoje(), empresa_id, provedor, operacao,
+            "INSERT INTO uso_ia (dia, empresa_id, provedor, operacao, fonte_id, "
+            "fonte_nome, tokens_in, tokens_out, custo, criado_em) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (_hoje(), empresa_id, provedor, operacao, fonte_id, fonte_nome,
              int(uso.get("in", 0)), int(uso.get("out", 0)), float(custo),
              datetime.now(timezone.utc).isoformat()),
         )
         self.db.commit()
+
+    def curva_abc(self, *, empresa_id=None, somente_empresa: bool = False,
+                  limiar_a: float = 0.80, limiar_b: float = 0.95) -> dict:
+        """Curva ABC do consumo de tokens **por fonte** (análise de Pareto).
+
+        Ordena as fontes pelo total de tokens (entrada+saída), calcula o
+        percentual e o acumulado, e classifica:
+
+        * **A** — fontes que somam até ``limiar_a`` (≈80%) do consumo;
+        * **B** — as seguintes até ``limiar_b`` (≈95%);
+        * **C** — a cauda restante.
+
+        Devolve ``{"itens": [...], "totais": {...}, "classes": {...}}``.
+        """
+        clausulas, params = ["fonte_nome IS NOT NULL"], []
+        if somente_empresa:
+            clausulas.append("empresa_id = ?")
+            params.append(empresa_id)
+        where = " WHERE " + " AND ".join(clausulas)
+        linhas = self.db.query_all(
+            "SELECT fonte_nome, COUNT(*) AS chamadas, "
+            "COALESCE(SUM(tokens_in),0) AS tokens_in, "
+            "COALESCE(SUM(tokens_out),0) AS tokens_out, "
+            "COALESCE(SUM(tokens_in + tokens_out),0) AS tokens, "
+            "COALESCE(SUM(custo),0) AS custo FROM uso_ia" + where +
+            " GROUP BY fonte_nome ORDER BY tokens DESC, fonte_nome ASC", params,
+        )
+        total_tokens = sum(int(l["tokens"]) for l in linhas) or 0
+        total_custo = sum(float(l["custo"]) for l in linhas)
+        itens, acumulado = [], 0
+        classes = {"A": {"fontes": 0, "tokens": 0, "custo": 0.0},
+                   "B": {"fontes": 0, "tokens": 0, "custo": 0.0},
+                   "C": {"fontes": 0, "tokens": 0, "custo": 0.0}}
+        for l in linhas:
+            tk = int(l["tokens"])
+            pct = (tk / total_tokens) if total_tokens else 0.0
+            # A classe é decidida pelo acumulado ANTES deste item: assim o item
+            # que cruza o limiar entra na classe em que começou (o 1º é sempre A,
+            # mesmo quando sozinho já passa de 80%).
+            if acumulado < limiar_a:
+                classe = "A"
+            elif acumulado < limiar_b:
+                classe = "B"
+            else:
+                classe = "C"
+            acumulado += pct
+            itens.append({
+                "fonte_nome": l["fonte_nome"],
+                "chamadas": int(l["chamadas"]),
+                "tokens": tk,
+                "custo": float(l["custo"]),
+                "pct": pct,
+                "pct_acumulado": min(acumulado, 1.0),
+                "classe": classe,
+            })
+            classes[classe]["fontes"] += 1
+            classes[classe]["tokens"] += tk
+            classes[classe]["custo"] += float(l["custo"])
+        return {
+            "itens": itens,
+            "totais": {"tokens": total_tokens, "custo": total_custo,
+                       "fontes": len(itens)},
+            "classes": classes,
+        }
 
     def total_do_dia(self, dia: str = None, *, empresa_id=None,
                      somente_empresa: bool = False) -> dict:
