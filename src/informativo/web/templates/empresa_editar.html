@@ -42,10 +42,20 @@
           {% endfor %}
         </select>
       </label>
+      <label>Dias de armazenamento (retenção)
+        <input type="number" name="dias_retencao" min="0" max="3650" value="{{ empresa.dias_retencao }}" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
+      <label>Máx. de notícias no informativo
+        <input type="number" name="max_noticias" min="1" max="50" value="{{ empresa.max_noticias }}" {{ '' if pode_gerir else 'disabled' }}>
+      </label>
       <label class="check">
         <input type="checkbox" name="ativa" value="1" {{ 'checked' if empresa.ativa }} {{ '' if pode_gerir else 'disabled' }}> Empresa ativa
       </label>
     </div>
+    <p class="help">Retenção: captações mais antigas que esse nº de dias são
+      removidas automaticamente (<strong>0 = manter tudo</strong>). Máx. de
+      notícias: quantas notícias o informativo desta empresa comporta — o
+      sistema usa as de maior prioridade e ajusta a quantidade ao template.</p>
     <p class="help">Prévia do e-mail deste cliente:</p>
     <div class="card note" style="margin:0">
       <div><span class="muted">Assunto:</span> <strong>{{ empresa.assunto_email }}</strong></div>
@@ -56,6 +66,12 @@
     {% if pode_gerir %}
     <div class="form-actions" style="margin-top:16px">
       <button type="submit" class="btn btn-primary">Salvar alterações</button>
+      {% if empresa.dias_retencao and empresa.dias_retencao > 0 %}
+      <button type="submit" class="btn btn-danger"
+              formaction="{{ url_for('empresa_expurgar', empresa_id=empresa.id) }}" formnovalidate
+              onclick="return confirm('Aplicar a retenção agora e remover captações com mais de {{ empresa.dias_retencao }} dia(s)?');">
+        Executar retenção agora</button>
+      {% endif %}
     </div>
     {% else %}
     <p class="muted">Somente administradores podem editar empresas.</p>

@@ -256,6 +256,51 @@ def test_definir_disparado_toggle(db):
     assert cap.get(cid)["disparado_em"] is None
 
 
+def test_retencao_expurga_antigas(db):
+    from datetime import datetime, timedelta, timezone
+
+    from informativo.empresas import EmpresaRepository
+
+    e = EmpresaRepository(db).criar("ACME", nome_solucao="ACME")
+    f = FonteRepository(db).criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    a = cap.registrar(f, "Notícia recente distinta aeroporto.", empresa_id=e.id)
+    b = cap.registrar(f, "Notícia antiga totalmente diferente enchente.", empresa_id=e.id)
+    # envelhece a 'b' para 40 dias atrás
+    velho = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+    db.execute("UPDATE captacoes SET criado_em = ? WHERE id = ?", (velho, b))
+    db.commit()
+    # retenção de 30 dias remove só a antiga
+    n = cap.expurgar_antigas(30, empresa_id=e.id, somente_empresa=True)
+    assert n == 1
+    assert cap.get(a) is not None and cap.get(b) is None
+    # dias<=0 não remove nada
+    assert cap.expurgar_antigas(0, empresa_id=e.id, somente_empresa=True) == 0
+
+
+def test_expurgar_por_retencao_por_empresa(db):
+    from datetime import datetime, timedelta, timezone
+
+    from informativo.empresas import EmpresaRepository
+    from informativo.omniroute import expurgar_por_retencao
+
+    er = EmpresaRepository(db)
+    a = er.criar("A", nome_solucao="A")
+    b = er.criar("B", nome_solucao="B")
+    er.atualizar(a.id, dias_retencao=15)   # A expurga com 15 dias
+    er.atualizar(b.id, dias_retencao=0)    # B mantém tudo
+    f = FonteRepository(db).criar("Reuters", "reuters.com")
+    cap = CaptacaoRepository(db)
+    ca = cap.registrar(f, "Alpha antiga empresa A greve.", empresa_id=a.id)
+    cb = cap.registrar(f, "Bravo antiga empresa B enchente.", empresa_id=b.id)
+    velho = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat()
+    db.execute("UPDATE captacoes SET criado_em = ?", (velho,))
+    db.commit()
+    total = expurgar_por_retencao(db)
+    assert total == 1  # só a da empresa A
+    assert cap.get(ca) is None and cap.get(cb) is not None
+
+
 def test_prompt_parafrase_tem_frente_e_conteudo(db):
     cap = {
         "fonte_nome": "Reuters", "regiao": "Brasil",

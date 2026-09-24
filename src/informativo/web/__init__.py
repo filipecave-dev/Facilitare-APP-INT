@@ -74,6 +74,14 @@ def create_app(dsn: Optional[str] = None) -> Flask:
         if sett.get("fontes_rss_ativadas") != "1":
             FonteRepository(db).ativar_com_rss_global()
             sett.set("fontes_rss_ativadas", "1")
+        # Rotina de retenção: aplica o prazo de armazenamento de cada empresa
+        # (remove captações além do limite). Roda a cada subida do serviço.
+        from ..omniroute import expurgar_por_retencao
+
+        try:
+            expurgar_por_retencao(db)
+        except Exception as exc:  # noqa: BLE001 — nunca bloquear o boot
+            print(f"[Informativo] Retenção: falha ao expurgar ({exc}).")
         # Marca a data de início do plano gratuito do banco (Render). Na 1ª vez
         # define hoje; e uma correção única alinha à data real em que o banco
         # foi provisionado no Render. O Administrador pode reajustar depois em
@@ -169,6 +177,15 @@ def _principal():
     if not username:
         return None
     return UsuarioRepository(_db()).get(username)
+
+
+def _inteiro(valor, padrao: int, minimo: int, maximo: int) -> int:
+    """Converte texto de formulário em inteiro dentro de [minimo, maximo]."""
+    try:
+        n = int(valor)
+    except (TypeError, ValueError):
+        return padrao
+    return max(minimo, min(maximo, n))
 
 
 def login_obrigatorio(fn):
@@ -1197,6 +1214,10 @@ def _registrar(app: Flask) -> None:
             200, status="aprovada", empresa_id=alvo_emp,
             somente_empresa=somente or empresa is not None,
         )
+        # Ajusta a quantidade de notícias ao que a empresa/template comporta:
+        # usa as de maior prioridade (já vêm ordenadas) até o máximo definido.
+        if empresa and empresa.max_noticias and empresa.max_noticias > 0:
+            aprovadas = aprovadas[:empresa.max_noticias]
         template = logo = None
         if empresa and empresa.tem_template:
             template = EmpresaRepository(_db()).obter_template(empresa.id)
@@ -1328,6 +1349,8 @@ def _registrar(app: Flask) -> None:
                         request.form.get("tema_primary", empresa.tema_primary or TEMA_PADRAO)
                     ),
                     fonte_modelo=request.form.get("fonte_modelo") or None,
+                    dias_retencao=_inteiro(request.form.get("dias_retencao"), 0, 0, 3650),
+                    max_noticias=_inteiro(request.form.get("max_noticias"), 8, 1, 50),
                     ativa=request.form.get("ativa", "1") == "1",
                 )
                 flash("Empresa atualizada.", "ok")
@@ -1345,6 +1368,29 @@ def _registrar(app: Flask) -> None:
             logo_altura=LOGO_ALTURA_BARRA,
             logo_largura_max=LOGO_LARGURA_MAX,
         )
+
+    @app.route("/empresas/<int:empresa_id>/expurgar", methods=["POST"])
+    @perfil_obrigatorio("Administrador")
+    def empresa_expurgar(empresa_id: int):
+        """Aplica agora a retenção da empresa (remove captações fora do prazo)."""
+        from ..omniroute import CaptacaoRepository
+
+        repo = EmpresaRepository(_db())
+        empresa = repo.get(empresa_id)
+        if empresa is None:
+            abort(404)
+        principal = _principal()
+        if not (_is_plataforma(principal) or principal.empresa_id == empresa_id):
+            abort(403)
+        if not empresa.dias_retencao or empresa.dias_retencao <= 0:
+            flash("Defina os dias de armazenamento (> 0) antes de expurgar.", "aviso")
+            return redirect(url_for("empresa_editar", empresa_id=empresa_id))
+        n = CaptacaoRepository(_db()).expurgar_antigas(
+            empresa.dias_retencao, empresa_id=empresa_id, somente_empresa=True
+        )
+        flash(f"Retenção aplicada: {n} captação(ões) além de {empresa.dias_retencao} "
+              "dia(s) removida(s).", "ok")
+        return redirect(url_for("empresa_editar", empresa_id=empresa_id))
 
     @app.route("/empresas/<int:empresa_id>/template", methods=["POST"])
     @perfil_obrigatorio("Administrador")

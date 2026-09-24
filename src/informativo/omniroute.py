@@ -221,6 +221,29 @@ class CaptacaoRepository:
         self.db.commit()
         return n
 
+    def expurgar_antigas(self, dias: int, *, empresa_id=None,
+                         somente_empresa: bool = False) -> int:
+        """Remove captações mais antigas que ``dias`` dias (retenção de dados).
+
+        Respeita o escopo de empresa. ``dias <= 0`` não remove nada. Devolve
+        quantas foram removidas.
+        """
+        if not dias or dias <= 0:
+            return 0
+        from datetime import datetime, timedelta, timezone
+
+        limite = (datetime.now(timezone.utc) - timedelta(days=int(dias))).isoformat()
+        clausulas, params = ["criado_em < ?"], [limite]
+        cl, pa = self._filtro_empresa(empresa_id, somente_empresa)
+        if cl:
+            clausulas.append(cl)
+            params += pa
+        where = " WHERE " + " AND ".join(clausulas)
+        n = int(self.db.scalar("SELECT COUNT(*) FROM captacoes" + where, params) or 0)
+        self.db.execute("DELETE FROM captacoes" + where, params)
+        self.db.commit()
+        return n
+
     def definir_frente(self, captacao_id: int, frente) -> None:
         """Reclassifica a captação em uma das frentes (ou limpa com None)."""
         if frente not in (None, "") and frente not in self.FRENTES:
@@ -365,6 +388,25 @@ class CaptacaoRepository:
             list(pa) + [int(dias)],
         )
         return list(reversed(linhas))
+
+
+def expurgar_por_retencao(db) -> int:
+    """Aplica a retenção de cada empresa: remove captações além do prazo.
+
+    Percorre as empresas com ``dias_retencao > 0`` e apaga as captações dela
+    mais antigas que esse número de dias. Devolve o total removido. Seguro para
+    rodar a cada boot (idempotente).
+    """
+    from .empresas import EmpresaRepository
+
+    repo_cap = CaptacaoRepository(db)
+    total = 0
+    for emp in EmpresaRepository(db).listar():
+        if emp.dias_retencao and emp.dias_retencao > 0:
+            total += repo_cap.expurgar_antigas(
+                emp.dias_retencao, empresa_id=emp.id, somente_empresa=True
+            )
+    return total
 
 
 def client_from_settings(settings_repo, timeout: int = 60) -> OmnirouteClient:

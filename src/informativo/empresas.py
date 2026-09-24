@@ -74,6 +74,8 @@ class Empresa:
     logo_nome: Optional[str] = None
     logo_mime: Optional[str] = None
     tem_logo: bool = False
+    dias_retencao: int = 0
+    max_noticias: int = 8
     ativa: bool = True
     criado_em: Optional[str] = None
     atualizado_em: Optional[str] = None
@@ -94,6 +96,8 @@ def _row_para_empresa(row: dict) -> Empresa:
         logo_nome=row.get("logo_nome"),
         logo_mime=row.get("logo_mime"),
         tem_logo=bool(row.get("logo_dados")),
+        dias_retencao=int(row.get("dias_retencao") or 0),
+        max_noticias=int(row.get("max_noticias") or 8),
         ativa=bool(row.get("ativa", 1)),
         criado_em=row.get("criado_em"),
         atualizado_em=row.get("atualizado_em"),
@@ -186,7 +190,8 @@ class EmpresaRepository:
     def atualizar(self, empresa_id: int, **campos) -> None:
         permitidos = {
             "nome", "nome_solucao", "assunto_email",
-            "contato_email", "tema_primary", "fonte_modelo", "ativa",
+            "contato_email", "tema_primary", "fonte_modelo",
+            "dias_retencao", "max_noticias", "ativa",
         }
         empresa = self.get(empresa_id)
         if empresa is None:

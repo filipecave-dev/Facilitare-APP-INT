@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS empresas (
     logo_nome      TEXT,
     logo_mime      TEXT,
     logo_dados     TEXT,
+    dias_retencao  INTEGER NOT NULL DEFAULT 0,
+    max_noticias   INTEGER NOT NULL DEFAULT 8,
     ativa          INTEGER NOT NULL DEFAULT 1,
     criado_em      TEXT,
     atualizado_em  TEXT
@@ -304,5 +306,7 @@ def init_db(db: Database) -> None:
     _garantir_coluna(db, "empresas", "logo_nome", "TEXT")
     _garantir_coluna(db, "empresas", "logo_mime", "TEXT")
     _garantir_coluna(db, "empresas", "logo_dados", "TEXT")
+    _garantir_coluna(db, "empresas", "dias_retencao", "INTEGER NOT NULL DEFAULT 0")
+    _garantir_coluna(db, "empresas", "max_noticias", "INTEGER NOT NULL DEFAULT 8")
     _garantir_coluna(db, "uso_ia", "fonte_id", "INTEGER")
     _garantir_coluna(db, "uso_ia", "fonte_nome", "TEXT")
