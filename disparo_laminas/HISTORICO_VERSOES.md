@@ -4,6 +4,12 @@ A versão aparece no título da janela, na aba Configurações, no nome do pacot
 (`disparo_laminas_vX.Y.Z.zip`) e na coluna **Versão** de cada envio registrado
 na aba Enviados.
 
+## 1.5.1 — 27/10/2026
+- Instalador: não reinstala/atualiza o que já está instalado (antes usava
+  `--upgrade` e consultava a internet a cada execução, parecendo travado);
+  mostra a versão, as etapas [1/3]...[3/3] e a dica de apertar ENTER se a
+  janela pausar; mensagem clara em caso de falha do pip.
+
 ## 1.5.0 — 27/10/2026
 - Número de versão visível: título da janela, aba Configurações, registro de
   abertura no log e nome do pacote zip.

@@ -44,7 +44,7 @@ conta do Outlook, pasta das lâminas, largura da imagem, assunto e textos
 ## Versão
 
 A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — versão
-1.5.0*) e em cada envio da aba Enviados. O que mudou em cada versão está em
+1.5.1*) e em cada envio da aba Enviados. O que mudou em cada versão está em
 [HISTORICO_VERSOES.md](HISTORICO_VERSOES.md).
 
 ## Instalação (uma vez)
@@ -55,6 +55,10 @@ A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — ver
 3. Dê dois cliques em **`instalar.bat`**. Ao terminar ele mostra na tela onde
    o programa ficou instalado, abre essa pasta no Explorer e cria o atalho
    **"Disparo de Laminas"** na Área de Trabalho.
+
+**Atualizar de versão:** extraia o zip novo por cima da pasta do programa.
+Não precisa rodar o `instalar.bat` de novo (só se uma versão pedir isso no
+[HISTORICO_VERSOES.md](HISTORICO_VERSOES.md)).
 
 Para abrir o programa: dois cliques no atalho **Disparo de Laminas** da Área
 de Trabalho (ou em **`iniciar.bat`** dentro da pasta). O Outlook precisa estar
