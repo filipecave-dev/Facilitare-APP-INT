@@ -1,0 +1,5 @@
+# Disparo de Lâminas — dependências (Windows + Outlook instalado).
+openpyxl>=3.1
+pywin32>=306; sys_platform == "win32"
+# Opcional: mostra a prévia da lâmina na tela.
+Pillow>=10.0

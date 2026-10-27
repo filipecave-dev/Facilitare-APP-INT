@@ -131,6 +131,13 @@ O banco é escolhido pelo `INFORMATIVO_DSN`:
 > `postgresql://`, migrar depois para um provedor sem expiração (ex.: Neon,
 > Supabase) é só trocar o valor de `INFORMATIVO_DSN`.
 
+## Disparo de Lâminas (ferramenta local)
+
+A pasta [`disparo_laminas/`](disparo_laminas/README.md) traz um programa
+independente (Windows + Outlook) para o envio das lâminas de prospecção:
+escolha da campanha/lâmina, aviso de e-mails duplicados, limite diário,
+intervalo entre envios, cópia por contato e lista de enviados.
+
 ## Testes
 
 ```bash

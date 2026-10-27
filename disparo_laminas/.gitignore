@@ -1,0 +1,4 @@
+# Dados locais do disparo (configuração, histórico e simulações)
+config.json
+config.tmp
+dados/
