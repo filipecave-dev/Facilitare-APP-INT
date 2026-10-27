@@ -106,7 +106,10 @@ dentro da sua pasta de usuário.
    2. escolha a **planilha** e a **aba** e clique em **Carregar**;
    3. confira os avisos de duplicados, marque quem vai receber e quem leva
       **CC**;
-   4. clique em **Pré-visualizar** (abre o e-mail no Outlook sem enviar);
+   4. clique em **Pré-visualizar** (abre o e-mail no Outlook sem enviar) e,
+      se quiser, em **Enviar teste...** (envia de verdade para o endereço que
+      você digitar, com "[TESTE]" no assunto, sem cópia e sem entrar na lista
+      de enviados);
    5. clique em **Iniciar disparo** e confirme o resumo.
 
 > Para testar sem enviar nada, ligue o **Modo simulação** nas Configurações:

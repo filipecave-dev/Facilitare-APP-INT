@@ -451,3 +451,72 @@ def test_disparo_para_apos_erros_seguidos(hist):
     erros = [r for r in hist.listar() if r["status"] == ERRO]
     assert len(erros) == 3
     assert "3 erros seguidos" in _eventos(fila)[-1][1]["motivo"]
+
+
+class _MailFalso:
+    """E-mail do Outlook falso: o Send só funciona depois de abrir a janela."""
+
+    def __init__(self, exigir_janela=True):
+        self.Attachments = self
+        self.anexos, self.aberto, self.enviado = [], False, False
+        self.exigir_janela = exigir_janela
+        self.HTMLBody = "<html><body><p>Assinatura</p></body></html>"
+        self.GetInspector = None
+
+    def Add(self, caminho):  # Attachments.Add
+        self.anexos.append(caminho)
+
+        class _PA:
+            def SetProperty(self, *a):
+                pass
+
+        class _Anexo:
+            PropertyAccessor = _PA()
+        return _Anexo()
+
+    def Display(self, modal=False):
+        self.aberto = True
+
+    def Send(self):
+        if self.exigir_janela and not self.aberto:
+            raise _ComErro(-2147024809, "Parâmetro incorreto.", None, None)
+        self.enviado = True
+
+
+def _outlook_falso(exigir_janela):
+    from laminas.envio import EnviadorOutlook
+    criados = []
+
+    class _App:
+        def CreateItem(self, tipo):
+            criados.append(_MailFalso(exigir_janela))
+            return criados[-1]
+    e = EnviadorOutlook.__new__(EnviadorOutlook)  # sem abrir o Outlook de verdade
+    e.app, e.conta, e.incluir_assinatura, e.largura_max = _App(), None, True, 560
+    return e, criados
+
+
+def test_send_recusado_envia_abrindo_a_janela_como_a_macro(tmp_path):
+    from laminas.mensagem import Email
+    img = tmp_path / "l.png"
+    img.write_bytes(PNG_1x1)
+    email = Email(para="a@a.com", assunto="Oi", texto_inicio="Olá", texto_fim="", imagem=img)
+
+    e, criados = _outlook_falso(exigir_janela=True)
+    obs = e.enviar(email)
+    assert criados[0].enviado and criados[0].aberto and "abrindo a janela" in obs
+
+    e, criados = _outlook_falso(exigir_janela=False)
+    assert e.enviar(email) == "" and not criados[0].aberto  # Send direto: sem janela
+
+
+def test_observacao_do_envio_vai_para_o_historico(hist):
+    class _EnviadorComObs(_Enviador):
+        def enviar(self, email):
+            super().enviar(email)
+            return "Enviado abrindo a janela do e-mail (como a macro)"
+    contatos = [Contato(2, "A", "Ana", "ana@a.com", enviar=True)]
+    d, fila = _disparo(contatos, hist, _EnviadorComObs(), _Relogio())
+    d.run()
+    r = hist.listar()[0]
+    assert r["status"] == ENVIADO and "como a macro" in r["erro"]

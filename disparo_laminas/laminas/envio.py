@@ -19,7 +19,6 @@ from pathlib import Path
 from .mensagem import Email, corpo_html, documento_html, inserir_no_inicio_do_body
 
 _PR_ATTACH_CONTENT_ID = "http://schemas.microsoft.com/mapi/proptag/0x3712001F"
-_PR_ATTACHMENT_HIDDEN = "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B"
 _DISPID_SEND_USING_ACCOUNT = 64209
 
 
@@ -161,10 +160,6 @@ class EnviadorOutlook:
             cid = f"lamina-{uuid.uuid4().hex[:12]}"
             _etapa("embutir a lâmina no corpo",
                    lambda: anexo.PropertyAccessor.SetProperty(_PR_ATTACH_CONTENT_ID, cid))
-            try:
-                anexo.PropertyAccessor.SetProperty(_PR_ATTACHMENT_HIDDEN, True)
-            except Exception:  # noqa: BLE001 - só estético
-                pass
             src = f"cid:{cid}"
 
         for caminho in email.anexos:
@@ -179,9 +174,29 @@ class EnviadorOutlook:
         _etapa("montar o corpo do e-mail", setattr, mail, "HTMLBody", html)
         return mail
 
-    def enviar(self, email: Email) -> None:
+    def enviar(self, email: Email) -> str:
+        """Envia o e-mail. Devolve uma observação quando precisou de contorno.
+
+        Em alguns Outlooks o ``Send`` direto (sem abrir a janela) é recusado
+        com "Parâmetro incorreto"; nesse caso faz como a macro antiga: abre a
+        janela do e-mail e envia em seguida.
+        """
         mail = self._criar(email)
-        _etapa("enviar (Send)", mail.Send)
+        try:
+            mail.Send()
+            return ""
+        except Exception as exc:  # noqa: BLE001 - tenta como a macro
+            erro_direto = descrever_erro(exc)
+        try:
+            mail.Display(False)
+            mail.Send()
+            return "Enviado abrindo a janela do e-mail (como a macro)"
+        except Exception:  # noqa: BLE001 - último recurso: e-mail novo
+            pass
+        mail = self._criar(email)
+        _etapa(f"abrir o e-mail (o Send direto falhou: {erro_direto})", mail.Display, False)
+        _etapa(f"enviar (Send) — o Send direto também falhou: {erro_direto}", mail.Send)
+        return "Enviado abrindo a janela do e-mail (2ª tentativa)"
 
     def exibir(self, email: Email) -> None:
         """Abre o e-mail pronto no Outlook, sem enviar (pré-visualização)."""
@@ -217,8 +232,9 @@ class EnviadorSimulacao:
                            encoding="utf-8")
         return destino
 
-    def enviar(self, email: Email) -> None:
+    def enviar(self, email: Email) -> str:
         self._gravar(email)
+        return ""
 
     def exibir(self, email: Email) -> None:
         webbrowser.open(Path(self._gravar(email)).resolve().as_uri())

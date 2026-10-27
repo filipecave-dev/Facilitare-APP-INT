@@ -19,7 +19,7 @@ import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from . import config as cfgmod
@@ -29,7 +29,7 @@ from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDEN
 from .campanhas import (CAMPANHA_GERAL, lamina_do_envio, listar_anexos, listar_campanhas,
                         listar_laminas, pasta_apresentacoes, sugerir_anexo)
 from .disparo import Disparo
-from .envio import criar_enviador, manter_pc_acordado
+from .envio import criar_enviador, descrever_erro, manter_pc_acordado
 from .historico import Historico
 from .mensagem import CAMPOS_AJUDA, montar
 
@@ -276,6 +276,7 @@ class App(tk.Tk):
         botoes = ttk.Frame(f3)
         botoes.grid(row=0, column=2, sticky="e")
         ttk.Button(botoes, text="Pré-visualizar", command=self._previsualizar).pack(side="left", padx=2)
+        ttk.Button(botoes, text="Enviar teste...", command=self._enviar_teste).pack(side="left", padx=2)
         self.bt_iniciar = ttk.Button(botoes, text="▶  Iniciar disparo", command=self._iniciar)
         self.bt_iniciar.pack(side="left", padx=2)
         self.bt_parar = ttk.Button(botoes, text="■  Parar", command=self._parar, state="disabled")
@@ -727,28 +728,69 @@ class App(tk.Tk):
             "texto_fim": self.txt_fim.get("1.0", "end-1c"),
         }
 
-    def _previsualizar(self):
+    def _contato_exemplo(self, titulo: str) -> Contato | None:
+        """Contato selecionado na lista (ou o 1º marcado) para montar um exemplo."""
         selecionadas = [self.contatos[int(i)] for i in self.tv.selection()]
         alvo = next(iter(selecionadas), None) or next(iter(self._selecionados()), None)
         if alvo is None:
-            messagebox.showinfo("Pré-visualizar", "Carregue a lista e marque (ou selecione) um contato.")
-            return
+            messagebox.showinfo(titulo, "Carregue a lista e marque (ou selecione) um contato.")
+            return None
         if not alvo.nome or not alvo.empresa or not alvo.selecionavel:
             messagebox.showwarning(
-                "Pré-visualizar",
+                titulo,
                 f"Linha {alvo.linha} ({alvo.email or 'sem e-mail'}) não pode ser usada: "
                 f"{alvo.detalhe or 'faltam dados'}.\n\nSe o nome ou a empresa estão na planilha, "
                 "confira os campos 'Colunas' logo abaixo da planilha.")
+            return None
+        return alvo
+
+    def _email_exemplo(self, alvo: Contato, cc: str):
+        return montar(alvo, self._mensagem_atual(),
+                      imagem=lamina_do_envio(self._laminas_escolhidas(), 0, self.var_alternar.get()),
+                      cc=cc, cco=self.cfg.get("copia_oculta", ""), anexos=self._anexos_escolhidos())
+
+    def _previsualizar(self):
+        alvo = self._contato_exemplo("Pré-visualizar")
+        if alvo is None:
             return
-        laminas = self._laminas_escolhidas()
-        email = montar(alvo, self._mensagem_atual(),
-                       imagem=lamina_do_envio(laminas, 0, self.var_alternar.get()),
-                       cc=self.var_cc.get().strip(), cco=self.cfg.get("copia_oculta", ""),
-                       anexos=self._anexos_escolhidos())
+        email = self._email_exemplo(alvo, self.var_cc.get().strip())
         try:
             criar_enviador(self.cfg, PASTA_SIMULACAO).exibir(email)
         except Exception as exc:  # noqa: BLE001
-            messagebox.showerror("Pré-visualizar", str(exc))
+            messagebox.showerror("Pré-visualizar", descrever_erro(exc))
+
+    def _enviar_teste(self):
+        """Envia de verdade (lâmina, anexo e texto do contato escolhido) para um
+        endereço de teste, sem cópia e sem registrar na lista de enviados."""
+        alvo = self._contato_exemplo("Enviar teste")
+        if alvo is None:
+            return
+        destino = simpledialog.askstring(
+            "Enviar teste",
+            f"Enviar um e-mail de TESTE montado com os dados de {alvo.nome} ({alvo.empresa}) para:",
+            initialvalue=self.cfg.get("email_teste", ""), parent=self)
+        if not destino:
+            return
+        destino = destino.strip()
+        if not email_valido(destino):
+            messagebox.showerror("Enviar teste", f"E-mail inválido: {destino}")
+            return
+        self.cfg["email_teste"] = destino
+        cfgmod.salvar(self.cfg)
+        email = self._email_exemplo(alvo, cc="")
+        email.para, email.assunto = destino, f"[TESTE] {email.assunto}"
+        self.configure(cursor="watch")
+        self.update_idletasks()
+        try:
+            obs = criar_enviador(self.cfg, PASTA_SIMULACAO).enviar(email)
+        except Exception as exc:  # noqa: BLE001
+            self._log(f"✖ teste para {destino}: {descrever_erro(exc)}")
+            messagebox.showerror("Enviar teste", descrever_erro(exc))
+            return
+        finally:
+            self.configure(cursor="")
+        self._log(f"✔ teste enviado para {destino}" + (f" ({obs})" if obs else ""))
+        messagebox.showinfo("Enviar teste", f"Teste enviado para {destino}." + (f"\n\n{obs}" if obs else ""))
 
     def _validar_disparo(self) -> str | None:
         sel = self._selecionados()
@@ -872,7 +914,8 @@ class App(tk.Tk):
                 self._atualizar_linha(i)
             self._log(f"✔ ({self.feitos_disparo}/{self.total_disparo}) {c.email}"
                       + (f"  CC: {dados['email'].cc}" if dados["email"].cc else "")
-                      + (f"  [{dados['email'].imagem.name}]" if dados["email"].imagem else ""))
+                      + (f"  [{dados['email'].imagem.name}]" if dados["email"].imagem else "")
+                      + (f"  ({dados['obs']})" if dados.get("obs") else ""))
             self.lbl_status.configure(text=f"Enviado {self.feitos_disparo} de {self.total_disparo}.")
             self._atualizar_enviados()
             self._atualizar_contadores()

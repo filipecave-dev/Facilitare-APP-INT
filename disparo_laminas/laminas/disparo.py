@@ -117,7 +117,7 @@ class Disparo(threading.Thread):
                             assunto=email.assunto,
                             data_hora=self.agora().strftime("%Y-%m-%d %H:%M:%S"))
             try:
-                enviador.enviar(email)
+                obs = enviador.enviar(email) or ""
             except Exception as exc:  # noqa: BLE001 - registrado e mostrado na tela
                 erros += 1
                 erros_seguidos += 1
@@ -131,8 +131,8 @@ class Disparo(threading.Thread):
                 continue
             erros_seguidos = 0
             enviados += 1
-            self.historico.registrar(**registro, status=ENVIADO)
-            self._emitir("enviado", contato=contato, email=email,
+            self.historico.registrar(**registro, status=ENVIADO, erro=obs)
+            self._emitir("enviado", contato=contato, email=email, obs=obs,
                          hoje=self.historico.enviados_no_dia(self.agora().date()))
 
         self._emitir("fim", motivo=motivo, enviados=enviados, erros=erros)
