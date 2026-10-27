@@ -10,8 +10,14 @@ com uma tela simples.
    e, a partir dela, mostra as lâminas daquela campanha e carrega a mensagem
    da campanha. Dá para escolher uma lâmina ou **mesclar várias** (cada envio
    usa a próxima, em rodízio).
-2. **Lê a lista de envio** de uma planilha (`.xlsx`, `.xlsm` ou `.csv`) com as
-   colunas Empresa / Nome / E-mail (pode ser a própria aba "A ENVIAR" da macro).
+2. **Lê a lista de envio** de uma planilha (`.xlsx`, `.xlsm` ou `.csv`) — pode
+   ser a própria aba "A ENVIAR" da macro. As colunas de **Nome**, **Empresa** e
+   **E-mail** são encontradas pelo título, **em qualquer ordem** (aceita também
+   "Nome Completo", "Contato", "Razão Social", "E-mail Principal",
+   "Primeiro Nome" + "Sobrenome" etc.). A linha **Colunas**, logo abaixo da
+   planilha, mostra o que foi encontrado e permite trocar manualmente; a
+   escolha fica lembrada para aquela planilha/aba. O nome e a empresa de cada
+   linha substituem `{nome}` e `{empresa}` no assunto e no texto.
 3. **Aponta os problemas antes do disparo**:
    - 🔴 **e-mail duplicado na base** — avisa quais e-mails se repetem e em
      quais linhas; só a primeira ocorrência pode ser enviada;

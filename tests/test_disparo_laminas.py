@@ -63,6 +63,49 @@ def test_registros_reconhece_titulos_da_macro(tmp_path):
                      "email": "Ana@Acme.com.br", "copia": "", "data": None, "status": ""}]
 
 
+def test_colunas_em_qualquer_ordem_e_com_outros_titulos(tmp_path):
+    caminho = _planilha(tmp_path, [
+        ["Lista de prospecção - outubro"],  # linha de título acima do cabeçalho
+        [],
+        ["Cargo", "E-mail Principal", "Mensagem (parte de cima do e-mail)", "Razão Social", "Contato"],
+        ["Diretora", "ana@acme.com", "texto", "Acme Ltda", "Ana Souza"],
+    ])
+    from laminas.base import ler_base
+    regs, cab = ler_base(caminho, "A ENVIAR")
+    assert (regs[0]["nome"], regs[0]["empresa"], regs[0]["email"]) == ("Ana Souza", "Acme Ltda", "ana@acme.com")
+    assert cab.linha_titulo == 3
+    assert cab.descricao("nome") == "E - Contato" and cab.descricao("email") == "B - E-mail Principal"
+
+
+def test_primeiro_nome_mais_sobrenome_e_nome_da_empresa(tmp_path):
+    caminho = _planilha(tmp_path, [
+        ["Sobrenome", "Nome da Empresa", "Primeiro Nome", "Email"],
+        ["Souza", "Acme", "Ana", "ana@acme.com"],
+    ])
+    reg = registros(caminho)[0]
+    assert (reg["nome"], reg["empresa"]) == ("Ana Souza", "Acme")
+
+
+def test_planilha_sem_titulos_e_escolha_manual_das_colunas(tmp_path):
+    caminho = _planilha(tmp_path, [
+        ["Acme", "Ana Souza", "ana@acme.com"],
+        ["Beta", "Bia Lima", "bia@beta.com"],
+    ])
+    from laminas.base import ler_base
+    regs, cab = ler_base(caminho)
+    assert cab.linha_titulo == 0 and regs[0]["email"] == "ana@acme.com" and regs[0]["nome"] == ""
+    regs, cab = ler_base(caminho, colunas={"empresa": 0, "nome": 1})
+    assert len(regs) == 2 and (regs[1]["nome"], regs[1]["empresa"]) == ("Bia Lima", "Beta")
+
+
+def test_titulos_genericos_nao_viram_contato(tmp_path):
+    caminho = _planilha(tmp_path, [["Col1", "Col2", "Col3"], ["Gama", "Carla", "carla@gama.com"]])
+    from laminas.base import ler_base
+    regs, cab = ler_base(caminho, colunas={"empresa": 0, "nome": 1})
+    assert cab.linha_titulo == 1 and cab.descricao("nome") == "B - Col2"
+    assert [(r["linha"], r["nome"], r["empresa"]) for r in regs] == [(2, "Carla", "Gama")]
+
+
 def test_registros_csv_com_ponto_e_virgula(tmp_path):
     caminho = tmp_path / "base.csv"
     caminho.write_text("Empresa;Nome;E-mail;Cópia\nAcme;Ana;ana@acme.com;S\n", encoding="utf-8")

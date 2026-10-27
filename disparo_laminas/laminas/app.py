@@ -23,8 +23,9 @@ from tkinter import filedialog, messagebox, ttk
 from tkinter.scrolledtext import ScrolledText
 
 from . import config as cfgmod
-from .base import (DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDENTE, Contato,
-                   analisar, email_valido, listar_abas, registros)
+from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDENTE, Cabecalho,
+                   Contato, analisar, email_valido, ler_base, letra_coluna, listar_abas,
+                   registros)
 from .campanhas import CAMPANHA_GERAL, lamina_do_envio, listar_campanhas, listar_laminas
 from .disparo import Disparo
 from .envio import criar_enviador, manter_pc_acordado
@@ -51,6 +52,8 @@ FILTROS = {
     "Inválidos": lambda c: c.situacao == INVALIDO,
     "Enviados agora": lambda c: c.situacao == ENVIADO,
 }
+NENHUMA = "(nenhuma)"
+ROTULO_CAMPO = {"email": "E-mail", "nome": "Nome", "empresa": "Empresa", "copia": "Cópia (S/N)"}
 ROTULO_SITUACAO = {
     PENDENTE: "Pendente", DUPLICADO: "Duplicado", JA_ENVIADO: "Já enviado",
     INVALIDO: "Inválido", ENVIADO: "Enviado",
@@ -160,7 +163,7 @@ class App(tk.Tk):
         f2 = ttk.LabelFrame(aba, text=" 2. Lista de envio ", padding=8)
         f2.grid(row=1, column=0, sticky="nsew", pady=8)
         f2.columnconfigure(0, weight=1)
-        f2.rowconfigure(2, weight=1)
+        f2.rowconfigure(3, weight=1)
 
         linha = ttk.Frame(f2)
         linha.grid(row=0, column=0, sticky="ew")
@@ -174,9 +177,25 @@ class App(tk.Tk):
         self.cb_aba = ttk.Combobox(linha, textvariable=self.var_aba, state="readonly", width=18)
         self.cb_aba.grid(row=0, column=4, padx=4)
         ttk.Button(linha, text="Carregar / Recarregar", command=self._carregar_base).grid(row=0, column=5)
+        self.cb_aba.bind("<<ComboboxSelected>>", lambda e: self._carregar_base())
+
+        # Qual coluna da planilha é cada campo (detectado pelo título, em
+        # qualquer ordem; dá para trocar manualmente).
+        mapa = ttk.Frame(f2)
+        mapa.grid(row=1, column=0, sticky="ew", pady=(6, 0))
+        ttk.Label(mapa, text="Colunas:").pack(side="left")
+        self.cb_colunas: dict[str, ttk.Combobox] = {}
+        for campo in CAMPOS_BASE:
+            ttk.Label(mapa, text=f"  {ROTULO_CAMPO[campo]}").pack(side="left")
+            cb = ttk.Combobox(mapa, state="readonly", width=22, values=[NENHUMA])
+            cb.set(NENHUMA)
+            cb.pack(side="left", padx=2)
+            cb.bind("<<ComboboxSelected>>", lambda e, c=campo: self._trocar_coluna(c))
+            self.cb_colunas[campo] = cb
+        self.cabecalho: Cabecalho | None = None
 
         linha2 = ttk.Frame(f2)
-        linha2.grid(row=1, column=0, sticky="ew", pady=(6, 4))
+        linha2.grid(row=2, column=0, sticky="ew", pady=(6, 4))
         self.lbl_resumo = ttk.Label(linha2, text="Nenhuma planilha carregada.")
         self.lbl_resumo.pack(side="left")
         self.var_filtro = tk.StringVar(value="Todos")
@@ -187,7 +206,7 @@ class App(tk.Tk):
         ttk.Label(linha2, text="Mostrar:").pack(side="right", padx=4)
 
         tabela = ttk.Frame(f2)
-        tabela.grid(row=2, column=0, sticky="nsew")
+        tabela.grid(row=3, column=0, sticky="nsew")
         tabela.columnconfigure(0, weight=1)
         tabela.rowconfigure(0, weight=1)
         colunas = ("enviar", "cc", "linha", "empresa", "nome", "email", "situacao")
@@ -212,7 +231,7 @@ class App(tk.Tk):
         self.tv.bind("<Button-1>", self._clique_tabela)
 
         acoes = ttk.Frame(f2)
-        acoes.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        acoes.grid(row=4, column=0, sticky="ew", pady=(6, 0))
         ttk.Label(acoes, text="Enviar:").pack(side="left")
         ttk.Button(acoes, text="Marcar todos pendentes", command=self._marcar_todos).pack(side="left", padx=2)
         ttk.Button(acoes, text="Marcar só os de hoje", command=self._marcar_proximos).pack(side="left", padx=2)
@@ -224,7 +243,7 @@ class App(tk.Tk):
         ttk.Button(acoes, text="Limpar todas as cópias", command=self._cc_limpar).pack(side="left", padx=2)
         ttk.Label(f2, text="Dica: clique na coluna Enviar ou CC para marcar/desmarcar. "
                            "Use Ctrl/Shift para selecionar várias linhas.",
-                  foreground="#666").grid(row=4, column=0, sticky="w", pady=(4, 0))
+                  foreground="#666").grid(row=5, column=0, sticky="w", pady=(4, 0))
 
         # -- 3. disparo -----------------------------------------------------
         f3 = ttk.LabelFrame(aba, text=" 3. Disparo ", padding=8)
@@ -377,11 +396,17 @@ class App(tk.Tk):
             return
         if not self.cb_aba["values"]:
             self._atualizar_abas()
+        aba = self.var_aba.get() or None
         try:
-            regs = registros(caminho, self.var_aba.get() or None)
+            regs, cab = ler_base(caminho, aba)
+            manual = self._mapa_salvo(cab)
+            if manual:
+                regs, cab = ler_base(caminho, aba, manual)
         except Exception as exc:  # noqa: BLE001
             messagebox.showerror("Lista de envio", f"Erro ao ler a planilha:\n{exc}")
             return
+        self.cabecalho = cab
+        self._mostrar_colunas(cab)
 
         # Recarregar mantém as marcações de cópia feitas na tela.
         cc_antes = {c.email_norm for c in self.contatos if c.cc}
@@ -399,7 +424,16 @@ class App(tk.Tk):
             f"{resumo.invalidos} inválidos"))
         self._atualizar_contadores()
         self._log(f"Lista carregada: {Path(caminho).name} [{self.var_aba.get() or 'CSV'}] — "
-                  f"{resumo.pendentes} pendentes.")
+                  f"{resumo.pendentes} pendentes. Colunas: "
+                  + " · ".join(f"{ROTULO_CAMPO[c]} = {cab.descricao(c)}" for c in ("email", "nome", "empresa")))
+
+        faltando = [ROTULO_CAMPO[c] for c in ("nome", "empresa") if c not in cab.colunas]
+        if faltando:
+            messagebox.showwarning(
+                "Colunas não encontradas",
+                f"Não identifiquei a coluna de {' e '.join(faltando)} pelo título.\n\n"
+                "Escolha a coluna certa nos campos 'Colunas' (logo abaixo da planilha). "
+                "Sem nome e empresa o contato não pode ser enviado.")
 
         if resumo.duplicados:
             linhas = [f"• {email} — linhas {', '.join(map(str, ns))}"
@@ -412,6 +446,46 @@ class App(tk.Tk):
                 f"Encontrei {len(resumo.duplicados)} e-mail(s) repetido(s) na planilha. "
                 "Só a primeira ocorrência será enviada; as repetições ficam bloqueadas "
                 "(em vermelho na lista).\n\n" + "\n".join(linhas))
+
+    def _chave_mapa(self) -> str:
+        return f"{Path(self.var_base.get()).name}|{self.var_aba.get()}"
+
+    def _mapa_salvo(self, cab: Cabecalho) -> dict[str, int | None]:
+        """Escolhas manuais de coluna salvas para esta planilha/aba, achadas
+        pelo título (continua valendo se as colunas mudarem de lugar)."""
+        salvo = (self.cfg.get("mapa_colunas") or {}).get(self._chave_mapa()) or {}
+        manual: dict[str, int | None] = {}
+        for campo, ref in salvo.items():
+            if ref is None:
+                manual[campo] = None
+            elif ref in cab.titulos:
+                manual[campo] = cab.titulos.index(ref)
+            elif ref.startswith("#") and ref[1:].isdigit():
+                manual[campo] = int(ref[1:])
+        return manual
+
+    def _mostrar_colunas(self, cab: Cabecalho):
+        opcoes = [NENHUMA] + [f"{letra_coluna(j)} - {t}" if t else letra_coluna(j)
+                              for j, t in enumerate(cab.titulos)]
+        for campo, cb in self.cb_colunas.items():
+            cb["values"] = opcoes
+            cb.set(cab.descricao(campo))
+
+    def _trocar_coluna(self, campo: str):
+        if self.cabecalho is None or self._em_disparo(avisar=True):
+            return
+        escolha = self.cb_colunas[campo].get()
+        opcoes = list(self.cb_colunas[campo]["values"])
+        j = opcoes.index(escolha) - 1 if escolha in opcoes else -1
+        if j < 0:
+            ref = None
+        else:
+            titulo = self.cabecalho.titulos[j]
+            ref = titulo if titulo and self.cabecalho.titulos.count(titulo) == 1 else f"#{j}"
+        mapas = self.cfg.setdefault("mapa_colunas", {})
+        mapas.setdefault(self._chave_mapa(), {})[campo] = ref
+        cfgmod.salvar(self.cfg)
+        self._carregar_base()
 
     def _preencher_tabela(self):
         filtro = FILTROS.get(self.var_filtro.get(), FILTROS["Todos"])
@@ -583,9 +657,16 @@ class App(tk.Tk):
 
     def _previsualizar(self):
         selecionadas = [self.contatos[int(i)] for i in self.tv.selection()]
-        alvo = next((c for c in selecionadas if c.email), None) or next(iter(self._selecionados()), None)
+        alvo = next(iter(selecionadas), None) or next(iter(self._selecionados()), None)
         if alvo is None:
             messagebox.showinfo("Pré-visualizar", "Carregue a lista e marque (ou selecione) um contato.")
+            return
+        if not alvo.nome or not alvo.empresa or not alvo.selecionavel:
+            messagebox.showwarning(
+                "Pré-visualizar",
+                f"Linha {alvo.linha} ({alvo.email or 'sem e-mail'}) não pode ser usada: "
+                f"{alvo.detalhe or 'faltam dados'}.\n\nSe o nome ou a empresa estão na planilha, "
+                "confira os campos 'Colunas' logo abaixo da planilha.")
             return
         laminas = self._laminas_escolhidas()
         email = montar(alvo, self._mensagem_atual(),

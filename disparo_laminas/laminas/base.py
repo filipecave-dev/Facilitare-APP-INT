@@ -142,37 +142,101 @@ def ler_linhas(caminho: str, aba: Optional[str] = None) -> list[tuple]:
         wb.close()
 
 
-def mapear_colunas(linhas: list[tuple]) -> tuple[int, dict[str, int]]:
-    """Acha a linha de títulos (entre as 10 primeiras) e o índice de cada
-    coluna conhecida. Retorna ``(indice_da_linha_de_titulo, colunas)``."""
-    for i, linha in enumerate(linhas[:10]):
-        titulos = [_titulo(v) for v in linha]
-        colunas: dict[str, int] = {}
+# Títulos reconhecidos para cada coluna (sem acento, minúsculos). A ordem das
+# chaves importa: "sobrenome" antes de "nome", "nome da empresa" antes de "nome".
+_TITULOS: list[tuple[str, tuple[str, ...]]] = [
+    ("copia", ("copia (cc)", "copia", "cc", "com copia")),
+    ("sobrenome", ("sobrenome", "ultimo nome", "last name", "surname")),
+    ("empresa", ("empresa", "nome da empresa", "razao social", "nome fantasia", "companhia",
+                 "company", "organizacao", "organization", "instituicao", "cliente empresa")),
+    ("email", ("e-mail", "email", "e mail", "endereco de e-mail", "endereco de email",
+               "correio eletronico", "mail")),
+    ("nome", ("nome", "nome completo", "nome do cliente", "nome do contato", "contato",
+              "primeiro nome", "cliente", "responsavel", "pessoa", "destinatario",
+              "name", "first name", "full name")),
+    ("data", ("data", "data de envio", "data envio", "date")),
+    ("hora", ("hora", "horario", "time")),
+    ("status", ("status", "situacao")),
+]
+_IGNORAR_TITULO = ("oculta", "cco", "bcc", "mensagem", "assunto", "complemento", "caminho",
+                   "imagem", "cargo", "telefone", "celular", "fone", "site", "linkedin")
+CAMPOS_BASE = ("email", "nome", "empresa", "copia")
+
+
+def _qualidade(titulo: str, apelido: str) -> int:
+    """3 = título igual, 2 = começa com o apelido, 1 = contém a palavra."""
+    if titulo == apelido:
+        return 3
+    if titulo.startswith(apelido + " ") or titulo.startswith(apelido + "("):
+        return 2
+    return 1 if re.search(rf"(^|[^a-z]){re.escape(apelido)}([^a-z]|$)", titulo) else 0
+
+
+def _classificar(titulos: list[str]) -> dict[str, int]:
+    """Índice da melhor coluna para cada campo, pelo título (qualquer ordem)."""
+    melhor: dict[str, tuple[int, int]] = {}  # campo -> (qualidade, -indice)
+    usados: dict[int, str] = {}
+    for campo, apelidos in _TITULOS:
         for j, t in enumerate(titulos):
-            if not t:
+            if not t or j in usados:
                 continue
-            eh_copia = "copia" in t or t in ("cc", "cco", "bcc") or "(cc)" in t
-            if eh_copia:
-                if "oculta" not in t and t not in ("cco", "bcc"):
-                    colunas.setdefault("copia", j)
-            elif "mail" in t:
-                colunas.setdefault("email", j)
-            elif "empresa" in t:
-                colunas.setdefault("empresa", j)
-            elif "nome" in t:
-                colunas.setdefault("nome", j)
-            elif t.startswith("data"):
-                colunas.setdefault("data", j)
-            elif t.startswith("hora"):
-                colunas.setdefault("hora", j)
-            elif "status" in t or "situacao" in t:
-                colunas.setdefault("status", j)
-        if "email" in colunas:
-            return i, colunas
-    raise ValueError(
-        "Não encontrei a coluna de E-mail nas primeiras linhas da planilha. "
-        "Confira se a aba tem os títulos Empresa / Nome / E-mail."
-    )
+            if any(p in t for p in _IGNORAR_TITULO) and not (campo == "copia" and "oculta" not in t):
+                continue
+            q = max(_qualidade(t, a) for a in apelidos)
+            if q and (campo not in melhor or (q, -j) > melhor[campo]):
+                melhor[campo] = (q, -j)
+        if campo in melhor:
+            usados[-melhor[campo][1]] = campo
+    return {campo: -idx for campo, (_, idx) in melhor.items()}
+
+
+def _coluna_de_emails(linhas: list[tuple]) -> Optional[int]:
+    """Coluna em que a maioria das células tem cara de e-mail (fallback)."""
+    contagem: dict[int, int] = {}
+    preenchidas: dict[int, int] = {}
+    for linha in linhas[:60]:
+        for j, v in enumerate(linha):
+            texto = limpar_email(v)
+            if texto:
+                preenchidas[j] = preenchidas.get(j, 0) + 1
+                if email_valido(texto):
+                    contagem[j] = contagem.get(j, 0) + 1
+    candidatas = [(n, -j) for j, n in contagem.items() if n >= max(1, preenchidas[j] // 2)]
+    return -max(candidatas)[1] if candidatas else None
+
+
+def mapear_colunas(linhas: list[tuple]) -> tuple[int, dict[str, int]]:
+    """Acha a linha de títulos (entre as 20 primeiras) e a coluna de cada
+    campo pelo **título**, em qualquer ordem. Retorna
+    ``(indice_da_linha_de_titulo, colunas)``; o índice é ``-1`` quando a
+    planilha não tem linha de títulos."""
+    melhor_linha, melhor_cols, melhor_pontos = None, {}, 0
+    for i, linha in enumerate(linhas[:20]):
+        cols = _classificar([_titulo(v) for v in linha])
+        if any(email_valido(limpar_email(v)) for v in linha):
+            continue  # linha de dados, não de títulos
+        pontos = sum(c in cols for c in ("email", "nome", "empresa")) * 2 + ("email" in cols)
+        if pontos > melhor_pontos:
+            melhor_linha, melhor_cols, melhor_pontos = i, cols, pontos
+    if melhor_linha is not None and "email" in melhor_cols:
+        return melhor_linha, melhor_cols
+    # Sem título de e-mail: procura a coluna pelos valores.
+    j = _coluna_de_emails(linhas[(melhor_linha or 0):])
+    if j is None:
+        raise ValueError(
+            "Não encontrei a coluna de E-mail na planilha. Confira se a aba "
+            "tem os títulos Empresa / Nome / E-mail."
+        )
+    if melhor_linha is None:
+        # Títulos não reconhecidos (ex.: "Col1"): a linha logo acima do
+        # primeiro e-mail é tratada como títulos, se existir e não estiver vazia.
+        primeiro = next((k for k, l in enumerate(linhas)
+                         if email_valido(limpar_email(l[j] if j < len(l) else None))), 0)
+        acima = primeiro - 1
+        if acima >= 0 and any(limpar_texto(v) for v in linhas[acima]):
+            return acima, {"email": j}
+        return -1, {"email": j}
+    return melhor_linha, {**melhor_cols, "email": j}
 
 
 def _valor(linha: tuple, colunas: dict[str, int], chave: str):
@@ -180,27 +244,80 @@ def _valor(linha: tuple, colunas: dict[str, int], chave: str):
     return linha[j] if j is not None and j < len(linha) else None
 
 
-def registros(caminho: str, aba: Optional[str] = None) -> list[dict]:
+@dataclass
+class Cabecalho:
+    """Linha de títulos encontrada e colunas usadas para cada campo."""
+    linha_titulo: int  # número da linha na planilha (0 = sem títulos)
+    titulos: list[str]
+    colunas: dict[str, int]
+
+    def descricao(self, campo: str) -> str:
+        j = self.colunas.get(campo)
+        if j is None:
+            return "(nenhuma)"
+        titulo = self.titulos[j] if j < len(self.titulos) and self.titulos[j] else ""
+        return f"{letra_coluna(j)} - {titulo}" if titulo else letra_coluna(j)
+
+
+def letra_coluna(j: int) -> str:
+    letras = ""
+    j += 1
+    while j:
+        j, r = divmod(j - 1, 26)
+        letras = chr(65 + r) + letras
+    return letras
+
+
+def ler_base(caminho: str, aba: Optional[str] = None,
+             colunas: Optional[dict[str, Optional[int]]] = None) -> tuple[list[dict], Cabecalho]:
     """Linhas da planilha como dicionários (empresa, nome, email, copia,
-    data, status, linha). Linhas totalmente vazias são ignoradas."""
+    data, status, linha) e o cabeçalho usado.
+
+    As colunas são achadas pelo título, em qualquer ordem. ``colunas``
+    permite escolher manualmente a coluna de um campo (índice a partir de 0;
+    ``None`` = nenhuma). Linhas totalmente vazias são ignoradas.
+    """
     linhas = ler_linhas(caminho, aba)
     if not linhas:
-        return []
-    inicio, colunas = mapear_colunas(linhas)
+        return [], Cabecalho(0, [], {})
+    inicio, detectadas = mapear_colunas(linhas)
+    cols = dict(detectadas)
+    for campo, j in (colunas or {}).items():
+        if j is None:
+            cols.pop(campo, None)
+        else:
+            cols[campo] = j
+    if "email" not in cols:
+        raise ValueError("Escolha qual coluna tem o E-mail.")
+    largura = max((len(l) for l in linhas[:max(inicio, 0) + 50]), default=0)
+    titulos = [limpar_texto(v) for v in linhas[inicio]] if inicio >= 0 else []
+    titulos += [""] * (largura - len(titulos))
+    cab = Cabecalho(inicio + 1, titulos, cols)
+
     saida = []
     for n, linha in enumerate(linhas[inicio + 1:], start=inicio + 2):
+        nome = limpar_texto(_valor(linha, cols, "nome"))
+        sobrenome = limpar_texto(_valor(linha, cols, "sobrenome"))
+        if sobrenome and sobrenome.casefold() not in nome.casefold():
+            nome = f"{nome} {sobrenome}".strip()
         reg = {
             "linha": n,
-            "empresa": limpar_texto(_valor(linha, colunas, "empresa")),
-            "nome": limpar_texto(_valor(linha, colunas, "nome")),
-            "email": limpar_email(_valor(linha, colunas, "email")),
-            "copia": limpar_texto(_valor(linha, colunas, "copia")),
-            "data": _data_hora(_valor(linha, colunas, "data"), _valor(linha, colunas, "hora")),
-            "status": limpar_texto(_valor(linha, colunas, "status")),
+            "empresa": limpar_texto(_valor(linha, cols, "empresa")),
+            "nome": nome,
+            "email": limpar_email(_valor(linha, cols, "email")),
+            "copia": limpar_texto(_valor(linha, cols, "copia")),
+            "data": _data_hora(_valor(linha, cols, "data"), _valor(linha, cols, "hora")),
+            "status": limpar_texto(_valor(linha, cols, "status")),
         }
         if reg["email"] or reg["nome"] or reg["empresa"]:
             saida.append(reg)
-    return saida
+    return saida, cab
+
+
+def registros(caminho: str, aba: Optional[str] = None,
+              colunas: Optional[dict[str, Optional[int]]] = None) -> list[dict]:
+    """Atalho de :func:`ler_base` que devolve só as linhas."""
+    return ler_base(caminho, aba, colunas)[0]
 
 
 def _data_hora(data, hora) -> Optional[datetime]:
@@ -255,13 +372,13 @@ def analisar(regs: Iterable[dict], ja_enviados: dict[str, Optional[str]]) -> tup
             resumo.duplicados.setdefault(norm, [primeira_linha[norm]]).append(c.linha)
         else:
             primeira_linha[norm] = c.linha
-            if norm in ja_enviados:
-                c.situacao = JA_ENVIADO
-                c.detalhe = "Já enviado" + _quando(ja_enviados[norm])
-            elif not c.nome or not c.empresa:
+            if not c.nome or not c.empresa:
                 c.situacao = INVALIDO
                 falta = " e ".join(x for x, v in (("nome", c.nome), ("empresa", c.empresa)) if not v)
                 c.detalhe = f"Falta {falta}"
+            elif norm in ja_enviados:
+                c.situacao = JA_ENVIADO
+                c.detalhe = "Já enviado" + _quando(ja_enviados[norm])
             else:
                 c.situacao, c.enviar = PENDENTE, True
         if not c.selecionavel or c.situacao == JA_ENVIADO:
