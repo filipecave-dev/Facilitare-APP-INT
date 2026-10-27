@@ -10,4 +10,6 @@ Substitui a macro ``Macro_Laminas`` (Excel/VBA) por um programa em Python:
 - todo envio fica registrado na lista de **Enviados** (histórico em SQLite).
 """
 
-__version__ = "1.0.0"
+# Versão do programa: aparece no título da janela, no nome do pacote (zip) e em
+# cada envio registrado. Suba a cada entrega e descreva em HISTORICO_VERSOES.md.
+__version__ = "1.5.0"

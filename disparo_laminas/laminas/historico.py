@@ -14,6 +14,7 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Iterable, Optional
 
+from . import __version__
 from .base import normalizar_email
 
 ENVIADO = "Enviado"
@@ -35,6 +36,7 @@ CREATE TABLE IF NOT EXISTS envios (
     lamina      TEXT,
     anexo       TEXT,
     assunto     TEXT,
+    versao      TEXT,
     status      TEXT NOT NULL,
     erro        TEXT
 );
@@ -46,6 +48,7 @@ COLUNAS_EXPORTACAO = [
     ("data_hora", "Data/Hora"), ("empresa", "Empresa"), ("nome", "Nome"),
     ("email", "E-mail"), ("cc", "Cópia (CC)"), ("campanha", "Campanha"),
     ("lamina", "Lâmina"), ("anexo", "Anexo"), ("assunto", "Assunto"), ("status", "Status"), ("erro", "Erro"),
+    ("versao", "Versão do programa"),
 ]
 
 
@@ -60,8 +63,9 @@ class Historico:
         with closing(self._conectar()) as con, con:
             con.executescript(_ESQUEMA)
             colunas = {r["name"] for r in con.execute("PRAGMA table_info(envios)")}
-            if "anexo" not in colunas:  # histórico criado antes do anexo
-                con.execute("ALTER TABLE envios ADD COLUMN anexo TEXT")
+            for coluna in ("anexo", "versao"):  # históricos de versões anteriores
+                if coluna not in colunas:
+                    con.execute(f"ALTER TABLE envios ADD COLUMN {coluna} TEXT")
 
     def _conectar(self) -> sqlite3.Connection:
         # Uma conexão por operação: o disparo roda em outra thread.
@@ -120,10 +124,10 @@ class Historico:
         with closing(self._conectar()) as con, con:
             con.execute(
                 "INSERT INTO envios (data_hora, empresa, nome, email, email_norm, cc,"
-                " campanha, lamina, anexo, assunto, status, erro)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " campanha, lamina, anexo, assunto, status, erro, versao)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (data_hora or _agora(), empresa, nome, email, normalizar_email(email), cc,
-                 campanha, lamina, anexo, assunto, status, erro),
+                 campanha, lamina, anexo, assunto, status, erro, __version__),
             )
 
     def importar(self, regs: Iterable[dict], origem: str = "") -> tuple[int, int]:
@@ -173,7 +177,7 @@ class Historico:
         for r in linhas:
             ws.append([r.get(chave) or "" for chave, _ in COLUNAS_EXPORTACAO])
         larguras = {"A": 20, "B": 30, "C": 28, "D": 36, "E": 30, "F": 16, "G": 28, "H": 36,
-                    "I": 50, "J": 11, "K": 30}
+                    "I": 50, "J": 11, "K": 30, "L": 12}
         for col, largura in larguras.items():
             ws.column_dimensions[col].width = largura
         ws.freeze_panes = "A2"

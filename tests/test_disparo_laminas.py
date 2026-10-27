@@ -520,3 +520,16 @@ def test_observacao_do_envio_vai_para_o_historico(hist):
     d.run()
     r = hist.listar()[0]
     assert r["status"] == ENVIADO and "como a macro" in r["erro"]
+
+
+# -- versão ------------------------------------------------------------------------
+
+def test_versao_documentada_e_gravada_no_historico(hist):
+    import re
+    from laminas import __version__
+    historico_versoes = (Path(__file__).resolve().parent.parent / "disparo_laminas"
+                         / "HISTORICO_VERSOES.md").read_text(encoding="utf-8")
+    primeira = re.search(r"^## (\d+\.\d+\.\d+)", historico_versoes, flags=re.M).group(1)
+    assert primeira == __version__, "suba __version__ e descreva a entrega em HISTORICO_VERSOES.md"
+    hist.registrar(email="a@a.com")
+    assert hist.listar()[0]["versao"] == __version__

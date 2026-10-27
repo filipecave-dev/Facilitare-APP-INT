@@ -22,6 +22,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
+from . import __version__
 from . import config as cfgmod
 from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDENTE, Cabecalho,
                    Contato, analisar, email_valido, ler_base, letra_coluna, listar_abas,
@@ -74,7 +75,7 @@ def _abrir(caminho: Path) -> None:
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("Disparo de Lâminas")
+        self.title(f"Disparo de Lâminas — versão {__version__}")
         self.geometry("1180x820")
         self.minsize(980, 680)
 
@@ -112,6 +113,7 @@ class App(tk.Tk):
         self._atualizar_contadores()
 
         self.protocol("WM_DELETE_WINDOW", self._fechar)
+        self._log(f"Disparo de Lâminas versão {__version__} iniciado.")
         self.after(300, self._processar_eventos)
         self.after(1000, self._relogio)
 
@@ -1058,7 +1060,8 @@ class App(tk.Tk):
         quadro.rowconfigure(0, weight=1)
         colunas = (("data_hora", "Data/Hora", 140), ("empresa", "Empresa", 170), ("nome", "Nome", 170),
                    ("email", "E-mail", 230), ("cc", "Cópia (CC)", 170), ("campanha", "Campanha", 100),
-                   ("lamina", "Lâmina", 150), ("anexo", "Anexo", 150), ("status", "Status", 80), ("erro", "Obs./Erro", 200))
+                   ("lamina", "Lâmina", 150), ("anexo", "Anexo", 150), ("status", "Status", 80), ("erro", "Obs./Erro", 200),
+                   ("versao", "Versão", 60))
         self.tv_env = ttk.Treeview(quadro, columns=[c for c, _, _ in colunas], show="headings")
         for col, titulo, larg in colunas:
             self.tv_env.heading(col, text=titulo)
@@ -1082,7 +1085,8 @@ class App(tk.Tk):
                     pass
             self.tv_env.insert("", "end", values=(
                 data, r["empresa"] or "", r["nome"] or "", r["email"], r["cc"] or "",
-                r["campanha"] or "", r["lamina"] or "", r.get("anexo") or "", r["status"], r["erro"] or ""),
+                r["campanha"] or "", r["lamina"] or "", r.get("anexo") or "", r["status"], r["erro"] or "",
+                r.get("versao") or ""),
                 tags=(r["status"],))
         enviados = sum(r["status"] == "Enviado" for r in linhas)
         self.lbl_enviados.configure(
@@ -1198,6 +1202,7 @@ class App(tk.Tk):
         ttk.Button(botoes, text="Abrir pasta de dados (histórico / simulação)",
                    command=lambda: (PASTA_DADOS.mkdir(exist_ok=True), _abrir(PASTA_DADOS))).pack(side="left", padx=2)
         ttk.Label(aba, foreground="#555", justify="left", text=(
+            f"Versão do programa: {__version__}\n"
             f"Histórico de enviados: {ARQUIVO_HISTORICO}\n"
             f"Configurações: {cfgmod.ARQUIVO_CONFIG}")).grid(row=len(campos) + 1, column=0, columnspan=3, sticky="w")
 

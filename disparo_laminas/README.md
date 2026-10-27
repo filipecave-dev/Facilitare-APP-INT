@@ -41,6 +41,12 @@ Tudo é editável: limite diário, intervalo, e-mail de cópia, cópia oculta,
 conta do Outlook, pasta das lâminas, largura da imagem, assunto e textos
 (por campanha ou padrão).
 
+## Versão
+
+A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — versão
+1.5.0*) e em cada envio da aba Enviados. O que mudou em cada versão está em
+[HISTORICO_VERSOES.md](HISTORICO_VERSOES.md).
+
 ## Instalação (uma vez)
 
 1. Instale o **Python 3.10+** em <https://www.python.org/downloads/> e, na
