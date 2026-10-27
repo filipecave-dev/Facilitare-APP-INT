@@ -39,10 +39,13 @@ conta do Outlook, pasta das lâminas, largura da imagem, assunto e textos
 1. Instale o **Python 3.10+** em <https://www.python.org/downloads/> e, na
    instalação, marque **"Add Python to PATH"**.
 2. Copie a pasta `disparo_laminas` para o seu computador.
-3. Dê dois cliques em **`instalar.bat`**.
+3. Dê dois cliques em **`instalar.bat`**. Ao terminar ele mostra na tela onde
+   o programa ficou instalado, abre essa pasta no Explorer e cria o atalho
+   **"Disparo de Laminas"** na Área de Trabalho.
 
-Para abrir o programa: dois cliques em **`iniciar.bat`** (o Outlook precisa
-estar instalado e configurado com a sua conta).
+Para abrir o programa: dois cliques no atalho **Disparo de Laminas** da Área
+de Trabalho (ou em **`iniciar.bat`** dentro da pasta). O Outlook precisa estar
+instalado e configurado com a sua conta.
 
 ## Organização das lâminas
 
