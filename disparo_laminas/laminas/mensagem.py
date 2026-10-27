@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import re
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -24,6 +24,7 @@ class Email:
     cc: str = ""
     cco: str = ""
     imagem: Optional[Path] = None
+    anexos: list[Path] = field(default_factory=list)
 
 
 def saudacao(agora: datetime) -> str:
@@ -48,7 +49,8 @@ def preencher(texto: str, contato: Contato, agora: datetime) -> str:
 
 
 def montar(contato: Contato, mensagem: dict, *, imagem: Optional[Path], cc: str = "",
-           cco: str = "", agora: Optional[datetime] = None) -> Email:
+           cco: str = "", anexos: Optional[list[Path]] = None,
+           agora: Optional[datetime] = None) -> Email:
     agora = agora or datetime.now()
     return Email(
         para=contato.email,
@@ -58,6 +60,7 @@ def montar(contato: Contato, mensagem: dict, *, imagem: Optional[Path], cc: str 
         cc=cc if contato.cc else "",
         cco=cco,
         imagem=imagem,
+        anexos=list(anexos or []),
     )
 
 

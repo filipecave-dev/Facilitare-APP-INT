@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS envios (
     cc          TEXT,
     campanha    TEXT,
     lamina      TEXT,
+    anexo       TEXT,
     assunto     TEXT,
     status      TEXT NOT NULL,
     erro        TEXT
@@ -44,7 +45,7 @@ CREATE INDEX IF NOT EXISTS ix_envios_data ON envios (data_hora);
 COLUNAS_EXPORTACAO = [
     ("data_hora", "Data/Hora"), ("empresa", "Empresa"), ("nome", "Nome"),
     ("email", "E-mail"), ("cc", "Cópia (CC)"), ("campanha", "Campanha"),
-    ("lamina", "Lâmina"), ("assunto", "Assunto"), ("status", "Status"), ("erro", "Erro"),
+    ("lamina", "Lâmina"), ("anexo", "Anexo"), ("assunto", "Assunto"), ("status", "Status"), ("erro", "Erro"),
 ]
 
 
@@ -58,6 +59,9 @@ class Historico:
         self.caminho.parent.mkdir(parents=True, exist_ok=True)
         with closing(self._conectar()) as con, con:
             con.executescript(_ESQUEMA)
+            colunas = {r["name"] for r in con.execute("PRAGMA table_info(envios)")}
+            if "anexo" not in colunas:  # histórico criado antes do anexo
+                con.execute("ALTER TABLE envios ADD COLUMN anexo TEXT")
 
     def _conectar(self) -> sqlite3.Connection:
         # Uma conexão por operação: o disparo roda em outra thread.
@@ -111,15 +115,15 @@ class Historico:
 
     # -- gravação ----------------------------------------------------------
     def registrar(self, *, email: str, nome: str = "", empresa: str = "", cc: str = "",
-                  campanha: str = "", lamina: str = "", assunto: str = "",
+                  campanha: str = "", lamina: str = "", anexo: str = "", assunto: str = "",
                   status: str = ENVIADO, erro: str = "", data_hora: Optional[str] = None) -> None:
         with closing(self._conectar()) as con, con:
             con.execute(
                 "INSERT INTO envios (data_hora, empresa, nome, email, email_norm, cc,"
-                " campanha, lamina, assunto, status, erro)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " campanha, lamina, anexo, assunto, status, erro)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (data_hora or _agora(), empresa, nome, email, normalizar_email(email), cc,
-                 campanha, lamina, assunto, status, erro),
+                 campanha, lamina, anexo, assunto, status, erro),
             )
 
     def importar(self, regs: Iterable[dict], origem: str = "") -> tuple[int, int]:
@@ -168,7 +172,8 @@ class Historico:
             c.font = Font(bold=True)
         for r in linhas:
             ws.append([r.get(chave) or "" for chave, _ in COLUNAS_EXPORTACAO])
-        larguras = {"A": 20, "B": 30, "C": 28, "D": 36, "E": 30, "F": 16, "G": 28, "H": 50, "I": 11, "J": 30}
+        larguras = {"A": 20, "B": 30, "C": 28, "D": 36, "E": 30, "F": 16, "G": 28, "H": 36,
+                    "I": 50, "J": 11, "K": 30}
         for col, largura in larguras.items():
             ws.column_dimensions[col].width = largura
         ws.freeze_panes = "A2"

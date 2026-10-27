@@ -26,7 +26,8 @@ from . import config as cfgmod
 from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDENTE, Cabecalho,
                    Contato, analisar, email_valido, ler_base, letra_coluna, listar_abas,
                    registros)
-from .campanhas import CAMPANHA_GERAL, lamina_do_envio, listar_campanhas, listar_laminas
+from .campanhas import (CAMPANHA_GERAL, lamina_do_envio, listar_anexos, listar_campanhas,
+                        listar_laminas, pasta_apresentacoes, sugerir_anexo)
 from .disparo import Disparo
 from .envio import criar_enviador, manter_pc_acordado
 from .historico import Historico
@@ -54,6 +55,8 @@ FILTROS = {
 }
 NENHUMA = "(nenhuma)"
 ROTULO_CAMPO = {"email": "E-mail", "nome": "Nome", "empresa": "Empresa", "copia": "Cópia (S/N)"}
+SEM_ANEXO = "(sem anexo)"
+LIMITE_ANEXO_MB = 15
 ROTULO_SITUACAO = {
     PENDENTE: "Pendente", DUPLICADO: "Duplicado", JA_ENVIADO: "Já enviado",
     INVALIDO: "Inválido", ENVIADO: "Enviado",
@@ -158,6 +161,21 @@ class App(tk.Tk):
         self.lbl_lamina.grid(row=3, column=1, sticky="w", padx=4)
         self.lbl_preview = ttk.Label(f1)
         self.lbl_preview.grid(row=1, column=2, rowspan=3, sticky="e", padx=(8, 0))
+
+        # Apresentação anexada: segue a campanha (institucional para
+        # Corporativo, eventos para Eventos...), mas pode ser trocada.
+        ttk.Label(f1, text="Apresentação\n(anexo):").grid(row=4, column=0, sticky="w", pady=(6, 0))
+        linha_anexo = ttk.Frame(f1)
+        linha_anexo.grid(row=4, column=1, columnspan=2, sticky="ew", padx=4, pady=(6, 0))
+        self.var_anexo = tk.StringVar(value=SEM_ANEXO)
+        self.cb_anexo = ttk.Combobox(linha_anexo, textvariable=self.var_anexo, state="readonly", width=48)
+        self.cb_anexo.pack(side="left")
+        self.cb_anexo.bind("<<ComboboxSelected>>", lambda e: self._ao_trocar_anexo(salvar=True))
+        ttk.Button(linha_anexo, text="Abrir pasta das apresentações",
+                   command=self._abrir_pasta_anexos).pack(side="left", padx=8)
+        self.lbl_anexo = ttk.Label(linha_anexo, text="", foreground="#555")
+        self.lbl_anexo.pack(side="left")
+        self.anexos_disponiveis: list[Path] = []
 
         # -- 2. lista de envio ---------------------------------------------
         f2 = ttk.LabelFrame(aba, text=" 2. Lista de envio ", padding=8)
@@ -296,6 +314,60 @@ class App(tk.Tk):
             cfgmod.salvar(self.cfg)
         self._carregar_mensagem_na_tela()
         self._ao_trocar_lamina()
+        self._recarregar_anexos()
+
+    # -- apresentação (anexo) -------------------------------------------------
+    def _pasta_anexos(self) -> Path | None:
+        return pasta_apresentacoes(self.cfg.get("pasta_laminas", ""), self.cfg.get("pasta_anexos", ""))
+
+    def _recarregar_anexos(self):
+        """Lista as apresentações e escolhe a da campanha: a definida na tela
+        antes (lembrada por campanha) ou a que combina pelo nome do arquivo."""
+        campanha = self.var_campanha.get()
+        self.anexos_disponiveis = listar_anexos(self._pasta_anexos())
+        nomes = [p.name for p in self.anexos_disponiveis]
+        self.cb_anexo["values"] = [SEM_ANEXO] + nomes
+        definido = (self.cfg.get("anexos_por_campanha") or {}).get(campanha)
+        if definido is not None and (definido == "" or definido in nomes):
+            escolha = definido or SEM_ANEXO
+        else:
+            sugerido = sugerir_anexo(self.anexos_disponiveis, campanha)
+            escolha = sugerido.name if sugerido else SEM_ANEXO
+        self.var_anexo.set(escolha)
+        self._ao_trocar_anexo(salvar=False)
+
+    def _anexos_escolhidos(self) -> list[Path]:
+        nome = self.var_anexo.get()
+        return [p for p in self.anexos_disponiveis if p.name == nome]
+
+    def _ao_trocar_anexo(self, salvar: bool):
+        campanha = self.var_campanha.get()
+        if salvar and campanha:
+            nome = self.var_anexo.get()
+            self.cfg.setdefault("anexos_por_campanha", {})[campanha] = "" if nome == SEM_ANEXO else nome
+            cfgmod.salvar(self.cfg)
+        anexos = self._anexos_escolhidos()
+        if anexos:
+            mb = anexos[0].stat().st_size / 1024 / 1024
+            aviso = "  ⚠ arquivo grande: pode ser recusado pelo servidor" if mb > LIMITE_ANEXO_MB else ""
+            self.lbl_anexo.configure(text=f"{mb:.1f} MB{aviso}",
+                                     foreground="#b00020" if aviso else "#555")
+        elif not self.anexos_disponiveis:
+            pasta = self._pasta_anexos()
+            self.lbl_anexo.configure(text=f"Nenhuma apresentação em {pasta}" if pasta else "",
+                                     foreground="#b00020")
+        else:
+            self.lbl_anexo.configure(text="Sem anexo para esta campanha.", foreground="#555")
+
+    def _abrir_pasta_anexos(self):
+        pasta = self._pasta_anexos()
+        if pasta and pasta.is_dir():
+            _abrir(pasta)
+        else:
+            messagebox.showwarning("Pasta não encontrada",
+                                   f"A pasta das apresentações não existe:\n{pasta}\n\n"
+                                   "Crie a pasta APRESENTAÇÃO dentro da pasta das lâminas "
+                                   "ou ajuste em Configurações.")
 
     def _laminas_escolhidas(self) -> list[Path]:
         return [self.laminas_disponiveis[i] for i in self.lst_laminas.curselection()]
@@ -671,7 +743,8 @@ class App(tk.Tk):
         laminas = self._laminas_escolhidas()
         email = montar(alvo, self._mensagem_atual(),
                        imagem=lamina_do_envio(laminas, 0, self.var_alternar.get()),
-                       cc=self.var_cc.get().strip(), cco=self.cfg.get("copia_oculta", ""))
+                       cc=self.var_cc.get().strip(), cco=self.cfg.get("copia_oculta", ""),
+                       anexos=self._anexos_escolhidos())
         try:
             criar_enviador(self.cfg, PASTA_SIMULACAO).exibir(email)
         except Exception as exc:  # noqa: BLE001
@@ -689,6 +762,8 @@ class App(tk.Tk):
         faltando = [p.name for p in laminas if not p.is_file()]
         if faltando:
             return "Lâmina não encontrada: " + ", ".join(faltando)
+        if self.var_anexo.get() != SEM_ANEXO and not any(p.is_file() for p in self._anexos_escolhidos()):
+            return f"Apresentação não encontrada: {self.var_anexo.get()}. Clique em 'Atualizar pastas'."
         if any(c.cc for c in sel):
             cc = self.var_cc.get().strip()
             if not all(email_valido(x.strip()) for x in cc.replace(",", ";").split(";") if x.strip()) or not cc:
@@ -722,6 +797,7 @@ class App(tk.Tk):
             f"Campanha: {self.var_campanha.get() or '-'}",
             "Lâmina(s): " + ", ".join(p.name for p in (laminas if alternar else laminas[:1]))
             + (" (alternando)" if alternar else ""),
+            "Anexo: " + (", ".join(p.name for p in self._anexos_escolhidos()) or "nenhum"),
             f"Contatos marcados: {len(sel)}",
             f"Serão enviados agora: {vao}" + (f"  (os outros {len(sel) - vao} ficam para outro dia — limite {self._limite()}/dia)" if vao < len(sel) else ""),
             f"Com cópia para {self.var_cc.get().strip()}: {com_cc}" if com_cc else "Sem cópia (CC)",
@@ -741,6 +817,7 @@ class App(tk.Tk):
             campanha=self.var_campanha.get(),
             laminas=laminas,
             alternar_laminas=alternar,
+            anexos=self._anexos_escolhidos(),
             email_copia=self.var_cc.get().strip(),
             copia_oculta=self.cfg.get("copia_oculta", ""),
             limite_diario=self._limite(),
@@ -938,7 +1015,7 @@ class App(tk.Tk):
         quadro.rowconfigure(0, weight=1)
         colunas = (("data_hora", "Data/Hora", 140), ("empresa", "Empresa", 170), ("nome", "Nome", 170),
                    ("email", "E-mail", 230), ("cc", "Cópia (CC)", 170), ("campanha", "Campanha", 100),
-                   ("lamina", "Lâmina", 150), ("status", "Status", 80), ("erro", "Obs./Erro", 200))
+                   ("lamina", "Lâmina", 150), ("anexo", "Anexo", 150), ("status", "Status", 80), ("erro", "Obs./Erro", 200))
         self.tv_env = ttk.Treeview(quadro, columns=[c for c, _, _ in colunas], show="headings")
         for col, titulo, larg in colunas:
             self.tv_env.heading(col, text=titulo)
@@ -962,7 +1039,7 @@ class App(tk.Tk):
                     pass
             self.tv_env.insert("", "end", values=(
                 data, r["empresa"] or "", r["nome"] or "", r["email"], r["cc"] or "",
-                r["campanha"] or "", r["lamina"] or "", r["status"], r["erro"] or ""),
+                r["campanha"] or "", r["lamina"] or "", r.get("anexo") or "", r["status"], r["erro"] or ""),
                 tags=(r["status"],))
         enviados = sum(r["status"] == "Enviado" for r in linhas)
         self.lbl_enviados.configure(
@@ -1045,6 +1122,7 @@ class App(tk.Tk):
         self.vars_cfg: dict[str, tk.Variable] = {}
         campos = [
             ("pasta_laminas", "Pasta das lâminas (uma subpasta por campanha)", "pasta"),
+            ("pasta_anexos", "Pasta das apresentações (em branco = APRESENTAÇÃO dentro da pasta das lâminas)", "pasta"),
             ("limite_diario", "Limite de envios por dia", "int"),
             ("intervalo_minutos", "Intervalo entre envios (minutos)", "float"),
             ("email_copia", "E-mail de cópia (CC) — quem recebe cópia nos marcados", "texto"),
@@ -1105,7 +1183,8 @@ class App(tk.Tk):
             if any(not email_valido(x) for x in enderecos):
                 messagebox.showerror("Configurações", f"E-mail inválido em '{chave}'.")
                 return
-        pasta_mudou = novo["pasta_laminas"] != self.cfg.get("pasta_laminas")
+        pasta_mudou = (novo["pasta_laminas"] != self.cfg.get("pasta_laminas")
+                       or novo["pasta_anexos"] != self.cfg.get("pasta_anexos"))
         copia_mudou = novo["email_copia"] != self.cfg.get("email_copia")
         self.cfg.update(novo)
         cfgmod.salvar(self.cfg)

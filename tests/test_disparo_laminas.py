@@ -158,7 +158,7 @@ def test_historico_importa_relatorio_antigo_e_exporta(tmp_path, hist):
     assert hist.exportar_xlsx(destino) == 1
     from openpyxl import load_workbook
     ws = load_workbook(destino)["ENVIADOS"]
-    assert ws["D2"].value == "ana@a.com" and ws["I2"].value == "Importado"
+    assert ws["D2"].value == "ana@a.com" and ws["J2"].value == "Importado"
 
 
 # -- mensagem ------------------------------------------------------------------
@@ -342,3 +342,55 @@ def test_enviador_simulacao_gera_html(tmp_path):
     assert len(arquivos) == 1
     conteudo = arquivos[0].read_text(encoding="utf-8")
     assert "CC: r@x.com" in conteudo and 'src="l.png"' in conteudo
+
+
+# -- apresentação anexada por campanha ----------------------------------------
+
+def test_apresentacao_por_campanha_e_pasta_nao_vira_campanha(tmp_path):
+    from laminas.campanhas import listar_anexos, pasta_apresentacoes, sugerir_anexo
+    for camp in ("CORPORATIVO", "EVENTOS"):
+        (tmp_path / camp).mkdir()
+        (tmp_path / camp / "l.png").write_bytes(PNG_1x1)
+    apres = tmp_path / "APRESENTAÇÃO"
+    apres.mkdir()
+    (apres / "capa.png").write_bytes(PNG_1x1)  # imagem lá dentro não cria campanha
+    (apres / "Apresentação Institucional Tivolitur.pdf").write_bytes(b"%PDF")
+    (apres / "Apresentação Eventos Tivolitur.pptx").write_bytes(b"PK")
+    (apres / "~$Apresentação Eventos Tivolitur.pptx").write_bytes(b"")
+    assert listar_campanhas(str(tmp_path)) == ["CORPORATIVO", "EVENTOS"]
+    pasta = pasta_apresentacoes(str(tmp_path))
+    assert pasta == apres
+    anexos = listar_anexos(pasta)
+    assert [p.name for p in anexos] == ["Apresentação Eventos Tivolitur.pptx",
+                                        "Apresentação Institucional Tivolitur.pdf"]
+    assert sugerir_anexo(anexos, "CORPORATIVO").name == "Apresentação Institucional Tivolitur.pdf"
+    assert sugerir_anexo(anexos, "Eventos").name == "Apresentação Eventos Tivolitur.pptx"
+    assert sugerir_anexo(anexos, "INCENTIVO") is None
+
+
+def test_disparo_anexa_apresentacao_e_registra(hist, tmp_path):
+    pdf = tmp_path / "Institucional.pdf"
+    pdf.write_bytes(b"%PDF")
+    contatos = [Contato(2, "Acme", "Ana", "ana@acme.com", enviar=True)]
+    enviador = _Enviador()
+    d, _ = _disparo(contatos, hist, enviador, _Relogio(), anexos=[pdf])
+    d.run()
+    assert enviador.enviados[0].anexos == [pdf]
+    assert hist.listar()[0]["anexo"] == "Institucional.pdf"
+
+    EnviadorSimulacao(tmp_path / "sim").enviar(enviador.enviados[0])
+    html = next((tmp_path / "sim").glob("*.html")).read_text(encoding="utf-8")
+    assert "Anexos: Institucional.pdf" in html
+
+
+def test_historico_antigo_ganha_coluna_anexo(tmp_path):
+    import sqlite3
+    caminho = tmp_path / "antigo.db"
+    with sqlite3.connect(caminho) as con:
+        con.execute("CREATE TABLE envios (id INTEGER PRIMARY KEY AUTOINCREMENT, data_hora TEXT,"
+                    " empresa TEXT, nome TEXT, email TEXT NOT NULL, email_norm TEXT NOT NULL, cc TEXT,"
+                    " campanha TEXT, lamina TEXT, assunto TEXT, status TEXT NOT NULL, erro TEXT)")
+        con.execute("INSERT INTO envios (email, email_norm, status) VALUES ('a@a.com', 'a@a.com', 'Enviado')")
+    h = Historico(caminho)
+    h.registrar(email="b@b.com", anexo="Eventos.pptx")
+    assert {r["email"]: r["anexo"] for r in h.listar()} == {"a@a.com": None, "b@b.com": "Eventos.pptx"}

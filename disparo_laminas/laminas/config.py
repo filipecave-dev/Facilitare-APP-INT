@@ -25,6 +25,12 @@ DEFAULTS: dict = {
         Path.home() / "OneDrive - Veronezzi Serviços Comerciais LTDA" / "DOCUMENTOS"
         / "TIVOLITUR" / "LAMINAS PROSPECT"
     ),
+    # Pasta das apresentações enviadas como anexo (em branco = subpasta
+    # APRESENTAÇÃO dentro da pasta das lâminas).
+    "pasta_anexos": "",
+    # Campanha -> nome do arquivo de apresentação ("" = sem anexo). Campanha
+    # fora daqui usa o arquivo cujo nome combina (institucional, eventos...).
+    "anexos_por_campanha": {},
     "limite_diario": 80,
     "intervalo_minutos": 3.0,
     # E-mail que recebe cópia (CC) nos contatos marcados antes do disparo.

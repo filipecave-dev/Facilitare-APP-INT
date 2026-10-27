@@ -9,7 +9,8 @@ com uma tela simples.
 1. **Pergunta do que se trata a campanha** (corporativo, eventos, incentivo…)
    e, a partir dela, mostra as lâminas daquela campanha e carrega a mensagem
    da campanha. Dá para escolher uma lâmina ou **mesclar várias** (cada envio
-   usa a próxima, em rodízio).
+   usa a próxima, em rodízio). A **apresentação da campanha vai como anexo**:
+   a institucional para Corporativo, a de eventos para Eventos (veja abaixo).
 2. **Lê a lista de envio** de uma planilha (`.xlsx`, `.xlsm` ou `.csv`) — pode
    ser a própria aba "A ENVIAR" da macro. As colunas de **Nome**, **Empresa** e
    **E-mail** são encontradas pelo título, **em qualquer ordem** (aceita também
@@ -66,7 +67,27 @@ LAMINAS PROSPECT/
 └── INCENTIVO/     ...
 ```
 
-A lâmina mais recente da campanha já vem selecionada. Por padrão a pasta é
+A lâmina mais recente da campanha já vem selecionada.
+
+### Apresentações (anexo)
+
+As apresentações ficam na subpasta **APRESENTAÇÃO** (ela não aparece como
+campanha):
+
+```
+LAMINAS PROSPECT/
+└── APRESENTAÇÃO/
+    ├── Apresentação Institucional ....pdf   → anexada em CORPORATIVO
+    └── Apresentação Eventos ....pdf         → anexada em EVENTOS
+```
+
+O programa escolhe a apresentação pelo **nome do arquivo**: "institucional"
+(ou "corporativo") para Corporativo, "evento" para Eventos e o nome da
+campanha para as demais. No quadro 1, em **Apresentação (anexo)**, dá para
+trocar o arquivo ou escolher *(sem anexo)*; a escolha fica lembrada para
+aquela campanha. O tamanho do arquivo aparece ao lado (acima de 15 MB o
+programa avisa, pois o servidor pode recusar). A aba Enviados registra qual
+apresentação foi anexada em cada envio. Por padrão a pasta é
 `OneDrive - Veronezzi Serviços Comerciais LTDA\DOCUMENTOS\TIVOLITUR\LAMINAS PROSPECT`
 dentro da sua pasta de usuário.
 

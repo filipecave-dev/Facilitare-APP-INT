@@ -84,6 +84,11 @@ class EnviadorOutlook:
                 pass
             src = f"cid:{cid}"
 
+        for caminho in email.anexos:
+            if not Path(caminho).is_file():
+                raise ErroEnvio(f"Anexo não encontrado: {caminho}")
+            mail.Attachments.Add(str(Path(caminho).resolve()))
+
         fragmento = corpo_html(email, src, self.largura_max)
         if self.incluir_assinatura:
             mail.GetInspector  # carrega a assinatura padrão no corpo
@@ -121,7 +126,8 @@ class EnviadorSimulacao:
         cabecalho = (
             f"<p style='font-family:monospace;background:#eef;padding:8px'>"
             f"Para: {email.para}<br>CC: {email.cc}<br>CCO: {email.cco}<br>"
-            f"Assunto: {email.assunto}</p><hr>"
+            f"Assunto: {email.assunto}<br>"
+            f"Anexos: {', '.join(Path(a).name for a in email.anexos) or '(nenhum)'}</p><hr>"
         )
         destino.write_text(documento_html(cabecalho + corpo_html(email, src, self.largura_max)),
                            encoding="utf-8")
