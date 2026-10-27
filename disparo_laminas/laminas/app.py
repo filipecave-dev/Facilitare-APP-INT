@@ -39,9 +39,9 @@ try:
 except ImportError:  # a pré-visualização da lâmina é opcional
     Image = ImageTk = None
 
-PASTA_DADOS = cfgmod.PASTA_PROGRAMA / "dados"
-ARQUIVO_HISTORICO = PASTA_DADOS / "historico_envios.db"
-PASTA_SIMULACAO = PASTA_DADOS / "simulacao"
+PASTA_DADOS = cfgmod.PASTA_DADOS
+ARQUIVO_HISTORICO = cfgmod.ARQUIVO_HISTORICO
+PASTA_SIMULACAO = cfgmod.PASTA_SIMULACAO
 
 MARCADO, DESMARCADO = "☑", "☐"
 FILTROS = {
@@ -79,6 +79,7 @@ class App(tk.Tk):
         self.geometry("1180x820")
         self.minsize(980, 680)
 
+        migrados = cfgmod.migrar_dados_antigos()
         self.cfg = cfgmod.carregar()
         self.historico = Historico(ARQUIVO_HISTORICO)
         self.contatos: list[Contato] = []
@@ -113,7 +114,9 @@ class App(tk.Tk):
         self._atualizar_contadores()
 
         self.protocol("WM_DELETE_WINDOW", self._fechar)
-        self._log(f"Disparo de Lâminas versão {__version__} iniciado.")
+        self._log(f"Disparo de Lâminas versão {__version__} iniciado. Dados em: {PASTA_DADOS}")
+        if migrados:
+            self._log("Trazidos da pasta do programa para a pasta de dados: " + ", ".join(migrados))
         self.after(300, self._processar_eventos)
         self.after(1000, self._relogio)
 
@@ -1200,7 +1203,7 @@ class App(tk.Tk):
         botoes.grid(row=len(campos), column=0, columnspan=3, sticky="w", pady=16)
         ttk.Button(botoes, text="Salvar configurações", command=self._salvar_config).pack(side="left", padx=2)
         ttk.Button(botoes, text="Abrir pasta de dados (histórico / simulação)",
-                   command=lambda: (PASTA_DADOS.mkdir(exist_ok=True), _abrir(PASTA_DADOS))).pack(side="left", padx=2)
+                   command=lambda: (PASTA_DADOS.mkdir(parents=True, exist_ok=True), _abrir(PASTA_DADOS))).pack(side="left", padx=2)
         ttk.Label(aba, foreground="#555", justify="left", text=(
             f"Versão do programa: {__version__}\n"
             f"Histórico de enviados: {ARQUIVO_HISTORICO}\n"

@@ -4,6 +4,15 @@ A versão aparece no título da janela, na aba Configurações, no nome do pacot
 (`disparo_laminas_vX.Y.Z.zip`) e na coluna **Versão** de cada envio registrado
 na aba Enviados.
 
+## 1.6.0 — 27/10/2026
+- **Dados fora da pasta do programa:** configurações (`config.json`),
+  histórico de enviados e simulações passam a ficar em
+  `%APPDATA%\Disparo de Laminas`. Agora dá para apagar a pasta do programa e
+  extrair a versão nova (pacote completo) sem perder o controle de enviados.
+- Na primeira abertura, o `config.json` e o histórico que estiverem na pasta
+  do programa (versões até 1.5.1) são copiados para a pasta de dados.
+- O log de abertura e a aba Configurações mostram onde os dados estão.
+
 ## 1.5.1 — 27/10/2026
 - Instalador: não reinstala/atualiza o que já está instalado (antes usava
   `--upgrade` e consultava a internet a cada execução, parecendo travado);

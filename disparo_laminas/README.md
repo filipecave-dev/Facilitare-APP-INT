@@ -44,7 +44,7 @@ conta do Outlook, pasta das lâminas, largura da imagem, assunto e textos
 ## Versão
 
 A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — versão
-1.5.1*) e em cada envio da aba Enviados. O que mudou em cada versão está em
+1.6.0*) e em cada envio da aba Enviados. O que mudou em cada versão está em
 [HISTORICO_VERSOES.md](HISTORICO_VERSOES.md).
 
 ## Instalação (uma vez)
@@ -56,8 +56,10 @@ A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — ver
    o programa ficou instalado, abre essa pasta no Explorer e cria o atalho
    **"Disparo de Laminas"** na Área de Trabalho.
 
-**Atualizar de versão:** extraia o zip novo por cima da pasta do programa.
-Não precisa rodar o `instalar.bat` de novo (só se uma versão pedir isso no
+**Atualizar de versão:** cada zip é o programa **completo**. Pode apagar a
+pasta antiga e extrair a nova no mesmo lugar (ou extrair por cima): seus dados
+ficam em outra pasta (veja "Onde ficam os dados") e não se perdem. Não precisa
+rodar o `instalar.bat` de novo (só se uma versão pedir isso no
 [HISTORICO_VERSOES.md](HISTORICO_VERSOES.md)).
 
 Para abrir o programa: dois cliques no atalho **Disparo de Laminas** da Área
@@ -130,10 +132,15 @@ programa impede que o Windows entre em suspensão enquanto envia.
 
 ## Onde ficam os dados
 
-- `config.json` — configurações e mensagens (criado ao salvar).
-- `dados/historico_envios.db` — lista de enviados (não trava se a planilha
-  estiver aberta no Excel). Faça backup desta pasta de vez em quando ou use
-  **Exportar para Excel**.
+Fora da pasta do programa, em **`%APPDATA%\Disparo de Laminas`** (cole esse
+endereço na barra do Explorer, ou use Configurações → *Abrir pasta de dados*):
+
+- `config.json` — configurações e mensagens;
+- `historico_envios.db` — lista de enviados (controle de duplicados);
+- `simulacao\` — e-mails gerados no modo simulação.
+
+**Não apague essa pasta**: é ela que impede reenviar para quem já recebeu.
+Faça backup dela de vez em quando ou use **Exportar para Excel**.
 
 ## Para desenvolvedores
 

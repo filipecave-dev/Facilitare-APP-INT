@@ -533,3 +533,31 @@ def test_versao_documentada_e_gravada_no_historico(hist):
     assert primeira == __version__, "suba __version__ e descreva a entrega em HISTORICO_VERSOES.md"
     hist.registrar(email="a@a.com")
     assert hist.listar()[0]["versao"] == __version__
+
+
+# -- dados fora da pasta do programa ------------------------------------------------
+
+def test_dados_ficam_fora_da_pasta_do_programa_e_migram(tmp_path, monkeypatch):
+    import importlib
+    monkeypatch.setenv("DISPARO_LAMINAS_DADOS", str(tmp_path / "appdata"))
+    cfg = importlib.reload(cfgmod)
+    try:
+        assert cfg.PASTA_DADOS == tmp_path / "appdata"
+        assert cfg.ARQUIVO_HISTORICO.parent == cfg.ARQUIVO_CONFIG.parent == cfg.PASTA_DADOS
+        assert cfg.PASTA_PROGRAMA not in cfg.PASTA_DADOS.parents
+
+        programa = tmp_path / "programa"
+        (programa / "dados").mkdir(parents=True)
+        (programa / "config.json").write_text('{"limite_diario": 50}', encoding="utf-8")
+        Historico(programa / "dados" / "historico_envios.db").registrar(email="a@a.com")
+        assert sorted(cfg.migrar_dados_antigos(programa, cfg.PASTA_DADOS)) == \
+            ["config.json", "historico_envios.db"]
+        assert cfg.carregar(cfg.ARQUIVO_CONFIG)["limite_diario"] == 50
+        assert Historico(cfg.ARQUIVO_HISTORICO).data_envio("a@a.com") is not None
+        # não sobrescreve o que já está na pasta de dados
+        (programa / "config.json").write_text('{"limite_diario": 10}', encoding="utf-8")
+        assert cfg.migrar_dados_antigos(programa, cfg.PASTA_DADOS) == []
+        assert cfg.carregar(cfg.ARQUIVO_CONFIG)["limite_diario"] == 50
+    finally:
+        monkeypatch.delenv("DISPARO_LAMINAS_DADOS")
+        importlib.reload(cfgmod)

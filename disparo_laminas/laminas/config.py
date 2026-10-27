@@ -10,10 +10,30 @@ from __future__ import annotations
 import copy
 import json
 import os
+import shutil
 from pathlib import Path
 
 PASTA_PROGRAMA = Path(__file__).resolve().parent.parent
-ARQUIVO_CONFIG = PASTA_PROGRAMA / "config.json"
+
+
+def _pasta_dados() -> Path:
+    """Pasta dos dados do usuário (configurações, histórico, simulações).
+
+    Fica FORA da pasta do programa — em ``%APPDATA%\\Disparo de Laminas`` no
+    Windows — para que a pasta do programa possa ser apagada e substituída a
+    cada versão sem perder o controle de enviados.
+    """
+    if os.environ.get("DISPARO_LAMINAS_DADOS"):
+        return Path(os.environ["DISPARO_LAMINAS_DADOS"])
+    if os.environ.get("APPDATA"):
+        return Path(os.environ["APPDATA"]) / "Disparo de Laminas"
+    return Path.home() / ".disparo_laminas"
+
+
+PASTA_DADOS = _pasta_dados()
+ARQUIVO_CONFIG = PASTA_DADOS / "config.json"
+ARQUIVO_HISTORICO = PASTA_DADOS / "historico_envios.db"
+PASTA_SIMULACAO = PASTA_DADOS / "simulacao"
 
 # Chave usada para a mensagem que vale para campanhas sem texto próprio.
 MENSAGEM_PADRAO = "padrao"
@@ -80,6 +100,7 @@ def carregar(caminho: os.PathLike | str = ARQUIVO_CONFIG) -> dict:
 
 def salvar(cfg: dict, caminho: os.PathLike | str = ARQUIVO_CONFIG) -> None:
     caminho = Path(caminho)
+    caminho.parent.mkdir(parents=True, exist_ok=True)
     tmp = caminho.with_suffix(".tmp")
     with tmp.open("w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
@@ -96,3 +117,21 @@ def mensagem_da_campanha(cfg: dict, campanha: str) -> dict:
 
 def tem_mensagem_propria(cfg: dict, campanha: str) -> bool:
     return bool(campanha) and campanha in (cfg.get("mensagens") or {})
+
+
+def migrar_dados_antigos(pasta_programa: Path = PASTA_PROGRAMA,
+                         pasta_dados: Path = PASTA_DADOS) -> list[str]:
+    """Traz para a pasta de dados o ``config.json`` e o histórico que as
+    versões até 1.5.x gravavam dentro da pasta do programa. Nunca sobrescreve
+    o que já existe na pasta de dados. Retorna o que foi copiado."""
+    copiados = []
+    origens = (
+        (pasta_programa / "config.json", pasta_dados / "config.json"),
+        (pasta_programa / "dados" / "historico_envios.db", pasta_dados / "historico_envios.db"),
+    )
+    for origem, destino in origens:
+        if origem.is_file() and not destino.exists():
+            destino.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(origem, destino)
+            copiados.append(destino.name)
+    return copiados

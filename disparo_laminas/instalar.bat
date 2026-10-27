@@ -44,9 +44,13 @@ echo.
 echo   Atalho na Area de Trabalho:
 echo   "Disparo de Laminas"
 echo.
-echo   Para atualizar de versao basta extrair o zip
-echo   novo por cima desta pasta - nao precisa
-echo   rodar este instalador de novo.
+echo   Para atualizar: apague esta pasta e extraia o
+echo   zip novo no mesmo lugar. Nao precisa rodar
+echo   este instalador de novo.
+echo.
+echo   Seus dados - historico de enviados e
+echo   configuracoes - ficam em outra pasta:
+echo   %APPDATA%\Disparo de Laminas
 echo ============================================
 echo.
 echo Abrindo a pasta do programa...
