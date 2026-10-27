@@ -24,8 +24,13 @@ from typing import Callable, Optional
 
 from .base import Contato
 from .campanhas import lamina_do_envio
+from .envio import descrever_erro
 from .historico import ENVIADO, ERRO, Historico
 from .mensagem import Email, montar
+
+# Para o disparo depois de tantos erros seguidos (problema no Outlook ou nos
+# arquivos): evita marcar a lista inteira como erro, 3 minutos por vez.
+MAX_ERROS_SEGUIDOS = 3
 
 
 class Disparo(threading.Thread):
@@ -76,7 +81,7 @@ class Disparo(threading.Thread):
             self._emitir("fim", motivo=str(exc), enviados=0, erros=0)
             return
 
-        enviados = erros = tentativas = 0
+        enviados = erros = tentativas = erros_seguidos = 0
         ultimo: Optional[float] = None
         motivo = "Disparo concluído."
         for contato in self.contatos:
@@ -115,9 +120,16 @@ class Disparo(threading.Thread):
                 enviador.enviar(email)
             except Exception as exc:  # noqa: BLE001 - registrado e mostrado na tela
                 erros += 1
-                self.historico.registrar(**registro, status=ERRO, erro=str(exc))
-                self._emitir("erro", contato=contato, erro=str(exc))
+                erros_seguidos += 1
+                texto = descrever_erro(exc)
+                self.historico.registrar(**registro, status=ERRO, erro=texto)
+                self._emitir("erro", contato=contato, erro=texto)
+                if erros_seguidos >= MAX_ERROS_SEGUIDOS:
+                    motivo = (f"Disparo interrompido após {erros_seguidos} erros seguidos. "
+                              f"Último erro: {texto}")
+                    break
                 continue
+            erros_seguidos = 0
             enviados += 1
             self.historico.registrar(**registro, status=ENVIADO)
             self._emitir("enviado", contato=contato, email=email,

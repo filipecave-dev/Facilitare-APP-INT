@@ -394,3 +394,60 @@ def test_historico_antigo_ganha_coluna_anexo(tmp_path):
     h = Historico(caminho)
     h.registrar(email="b@b.com", anexo="Eventos.pptx")
     assert {r["email"]: r["anexo"] for r in h.listar()} == {"a@a.com": None, "b@b.com": "Eventos.pptx"}
+
+
+# -- erros do Outlook ------------------------------------------------------------
+
+class _ComErro(Exception):
+    """Imita ``pywintypes.com_error`` (hresult, texto, excepinfo, argerr)."""
+
+
+def test_descrever_erro_com_traduz_codigo_e_etapa():
+    from laminas.envio import ErroEnvio, _etapa, descrever_erro
+    erro = _ComErro(-2147024809, "Parâmetro incorreto.", None, None)
+    assert descrever_erro(erro) == ("Parâmetro incorreto. [0x80070057] — o Outlook recusou "
+                                    "um dos dados (parâmetro incorreto)")
+    com_info = _ComErro(-2147352567, "Exceção.", (4096, "Microsoft Outlook",
+                                                  "Não é possível localizar este arquivo.",
+                                                  None, 0, -2147024894), None)
+    assert descrever_erro(com_info).startswith("Não é possível localizar este arquivo. [0x80070002]")
+
+    def falha():
+        raise erro
+    with pytest.raises(ErroEnvio, match=r"^Falha ao anexar a apresentação \(x.pdf\): Parâmetro incorreto"):
+        _etapa("anexar a apresentação (x.pdf)", falha)
+
+
+def test_anexo_recusado_tenta_copia_local(tmp_path, monkeypatch):
+    import tempfile
+    from laminas.envio import EnviadorOutlook
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / "tmp"))
+    pdf = tmp_path / "TIVOLITUR - APRESENTAÇÃO INSTITUCIONAL.pdf"
+    pdf.write_bytes(b"%PDF")
+    tentativas = []
+
+    class Anexos:
+        def Add(self, caminho):
+            tentativas.append(caminho)
+            if len(tentativas) == 1:
+                raise _ComErro(-2147024809, "Parâmetro incorreto.", None, None)
+            return object()
+
+    class Mail:
+        Attachments = Anexos()
+
+    enviador = EnviadorOutlook.__new__(EnviadorOutlook)  # sem abrir o Outlook
+    enviador._anexar(Mail(), pdf, "a apresentação")
+    assert tentativas[0] == str(pdf)
+    assert Path(tentativas[1]).parent == tmp_path / "tmp" / "disparo_laminas"
+    assert Path(tentativas[1]).read_bytes() == b"%PDF"
+
+
+def test_disparo_para_apos_erros_seguidos(hist):
+    contatos = [Contato(i, "A", f"N{i}", f"n{i}@a.com", enviar=True) for i in range(6)]
+    enviador = _Enviador(falhar={c.email for c in contatos})
+    d, fila = _disparo(contatos, hist, enviador, _Relogio())
+    d.run()
+    erros = [r for r in hist.listar() if r["status"] == ERRO]
+    assert len(erros) == 3
+    assert "3 erros seguidos" in _eventos(fila)[-1][1]["motivo"]

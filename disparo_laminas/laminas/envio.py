@@ -7,8 +7,10 @@ corpo (anexo com Content-ID), sem aparecer como anexo solto.
 
 from __future__ import annotations
 
+import os
 import shutil
 import sys
+import tempfile
 import uuid
 import webbrowser
 from datetime import datetime
@@ -21,8 +23,60 @@ _PR_ATTACHMENT_HIDDEN = "http://schemas.microsoft.com/mapi/proptag/0x7FFE000B"
 _DISPID_SEND_USING_ACCOUNT = 64209
 
 
+# Códigos de erro COM mais comuns, com uma explicação em português.
+_DICAS_COM = {
+    0x80070057: "o Outlook recusou um dos dados (parâmetro incorreto)",
+    0x80004005: "falha genérica do Outlook",
+    0x8004010F: "conta ou perfil do Outlook não encontrado",
+    0x80040109: "o item já foi enviado ou excluído",
+    0x80070005: "acesso negado (o Outlook bloqueou a automação ou o arquivo)",
+    0x800CCC0F: "a conexão com o servidor foi interrompida",
+}
+
+
 class ErroEnvio(Exception):
     pass
+
+
+def descrever_erro(exc: BaseException) -> str:
+    """Texto legível para erros COM (``pywintypes.com_error``) e outros."""
+    if isinstance(exc, ErroEnvio):
+        return str(exc)
+    args = getattr(exc, "args", ())
+    if len(args) >= 2 and isinstance(args[0], int):
+        codigo = args[0] & 0xFFFFFFFF
+        detalhe = str(args[1] or "")
+        info = args[2] if len(args) > 2 else None
+        if info and len(info) > 2 and info[2]:  # descrição dada pelo próprio Outlook
+            detalhe = str(info[2])
+            if len(info) > 5 and isinstance(info[5], int) and info[5]:
+                codigo = info[5] & 0xFFFFFFFF
+        dica = _DICAS_COM.get(codigo)
+        return f"{detalhe.strip()} [0x{codigo:08X}]" + (f" — {dica}" if dica else "")
+    return str(exc) or exc.__class__.__name__
+
+
+def _etapa(descricao: str, funcao, *args):
+    """Executa uma etapa do Outlook; se falhar, diz qual etapa foi."""
+    try:
+        return funcao(*args)
+    except ErroEnvio:
+        raise
+    except Exception as exc:  # noqa: BLE001 - erro COM traduzido
+        raise ErroEnvio(f"Falha ao {descricao}: {descrever_erro(exc)}") from exc
+
+
+def copia_local(caminho: Path) -> Path:
+    """Cópia do arquivo numa pasta temporária local. Contorna arquivos do
+    OneDrive que estão só na nuvem e caminhos que o Outlook não aceita."""
+    destino_dir = Path(tempfile.gettempdir()) / "disparo_laminas"
+    destino_dir.mkdir(parents=True, exist_ok=True)
+    destino = destino_dir / caminho.name
+    origem = caminho.stat()
+    if not destino.exists() or destino.stat().st_size != origem.st_size \
+            or destino.stat().st_mtime < origem.st_mtime:
+        shutil.copy2(caminho, destino)
+    return destino
 
 
 class EnviadorOutlook:
@@ -59,25 +113,54 @@ class EnviadorOutlook:
         raise ErroEnvio(f"Conta '{endereco}' não encontrada no Outlook. "
                         f"Contas disponíveis: {', '.join(disponiveis) or 'nenhuma'}")
 
+    def _novo_item(self):
+        """Cria o e-mail; com conta definida, faz ele sair por essa conta."""
+        if self.conta is None:
+            return _etapa("criar o e-mail no Outlook", self.app.CreateItem, 0)
+        mail = _etapa("criar o e-mail no Outlook", self.app.CreateItem, 0)
+        try:
+            mail.SendUsingAccount = self.conta
+            return mail
+        except Exception:  # noqa: BLE001 - tenta os contornos abaixo
+            pass
+        try:  # contorno conhecido do pywin32 para SendUsingAccount
+            mail._oleobj_.Invoke(_DISPID_SEND_USING_ACCOUNT, 0, 8, 0, self.conta)
+            return mail
+        except Exception:  # noqa: BLE001
+            pass
+        # Último recurso: cria o e-mail nos Rascunhos da própria conta.
+        rascunhos = _etapa(f"usar a conta '{self.conta.SmtpAddress}' do Outlook",
+                           lambda: self.conta.DeliveryStore.GetDefaultFolder(16))
+        return _etapa(f"usar a conta '{self.conta.SmtpAddress}' do Outlook", rascunhos.Items.Add, 0)
+
+    def _anexar(self, mail, caminho: Path, descricao: str):
+        """Anexa o arquivo; se o Outlook recusar o caminho original (OneDrive,
+        caracteres especiais...), tenta de novo com uma cópia local."""
+        caminho = Path(caminho)
+        if not caminho.is_file():
+            raise ErroEnvio(f"{descricao.capitalize()} não encontrada: {caminho}")
+        try:
+            return mail.Attachments.Add(os.path.abspath(caminho))
+        except Exception:  # noqa: BLE001 - tenta com a cópia local
+            pass
+        local = _etapa(f"copiar {descricao} ({caminho.name}) para uma pasta local", copia_local, caminho)
+        return _etapa(f"anexar {descricao} ({caminho.name})", mail.Attachments.Add, str(local))
+
     def _criar(self, email: Email):
-        mail = self.app.CreateItem(0)
-        if self.conta is not None:
-            try:
-                mail.SendUsingAccount = self.conta
-            except Exception:  # noqa: BLE001 - contorno conhecido do pywin32
-                mail._oleobj_.Invoke(_DISPID_SEND_USING_ACCOUNT, 0, 8, 0, self.conta)
-        mail.To = email.para
-        mail.CC = email.cc
-        mail.BCC = email.cco
-        mail.Subject = email.assunto
+        mail = self._novo_item()
+        _etapa(f"preencher o destinatário ({email.para})", setattr, mail, "To", email.para)
+        if email.cc:
+            _etapa(f"preencher a cópia CC ({email.cc})", setattr, mail, "CC", email.cc)
+        if email.cco:
+            _etapa(f"preencher a cópia oculta ({email.cco})", setattr, mail, "BCC", email.cco)
+        _etapa("preencher o assunto", setattr, mail, "Subject", email.assunto)
 
         src = None
         if email.imagem:
-            if not Path(email.imagem).is_file():
-                raise ErroEnvio(f"Lâmina não encontrada: {email.imagem}")
-            anexo = mail.Attachments.Add(str(Path(email.imagem).resolve()))
+            anexo = self._anexar(mail, email.imagem, "a lâmina")
             cid = f"lamina-{uuid.uuid4().hex[:12]}"
-            anexo.PropertyAccessor.SetProperty(_PR_ATTACH_CONTENT_ID, cid)
+            _etapa("embutir a lâmina no corpo",
+                   lambda: anexo.PropertyAccessor.SetProperty(_PR_ATTACH_CONTENT_ID, cid))
             try:
                 anexo.PropertyAccessor.SetProperty(_PR_ATTACHMENT_HIDDEN, True)
             except Exception:  # noqa: BLE001 - só estético
@@ -85,24 +168,25 @@ class EnviadorOutlook:
             src = f"cid:{cid}"
 
         for caminho in email.anexos:
-            if not Path(caminho).is_file():
-                raise ErroEnvio(f"Anexo não encontrado: {caminho}")
-            mail.Attachments.Add(str(Path(caminho).resolve()))
+            self._anexar(mail, caminho, "a apresentação")
 
         fragmento = corpo_html(email, src, self.largura_max)
         if self.incluir_assinatura:
-            mail.GetInspector  # carrega a assinatura padrão no corpo
-            mail.HTMLBody = inserir_no_inicio_do_body(mail.HTMLBody or "", fragmento)
+            base = _etapa("carregar a assinatura do Outlook", lambda: (mail.GetInspector, mail.HTMLBody)[1])
+            html = inserir_no_inicio_do_body(base or "", fragmento)
         else:
-            mail.HTMLBody = documento_html(fragmento)
+            html = documento_html(fragmento)
+        _etapa("montar o corpo do e-mail", setattr, mail, "HTMLBody", html)
         return mail
 
     def enviar(self, email: Email) -> None:
-        self._criar(email).Send()
+        mail = self._criar(email)
+        _etapa("enviar (Send)", mail.Send)
 
     def exibir(self, email: Email) -> None:
         """Abre o e-mail pronto no Outlook, sem enviar (pré-visualização)."""
-        self._criar(email).Display()
+        mail = self._criar(email)
+        _etapa("abrir a pré-visualização", mail.Display)
 
 
 class EnviadorSimulacao:
