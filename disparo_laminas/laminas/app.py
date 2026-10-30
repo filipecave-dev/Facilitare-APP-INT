@@ -22,7 +22,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from tkinter.scrolledtext import ScrolledText
 
-from . import __version__
+from . import __version__, salvas, segredo
 from . import config as cfgmod
 from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDENTE, Cabecalho,
                    Contato, analisar, email_valido, ler_base, letra_coluna, listar_abas,
@@ -30,7 +30,7 @@ from .base import (CAMPOS_BASE, DUPLICADO, ENVIADO, INVALIDO, JA_ENVIADO, PENDEN
 from .campanhas import (CAMPANHA_GERAL, lamina_do_envio, listar_anexos, listar_campanhas,
                         listar_laminas, pasta_apresentacoes, sugerir_anexo)
 from .disparo import Disparo
-from .envio import criar_enviador, descrever_erro, manter_pc_acordado
+from .envio import EnviadorSMTP, ErroEnvio, criar_enviador, descrever_erro, manter_pc_acordado
 from .historico import Historico
 from .mensagem import CAMPOS_AJUDA, montar
 
@@ -57,6 +57,16 @@ FILTROS = {
 NENHUMA = "(nenhuma)"
 ROTULO_CAMPO = {"email": "E-mail", "nome": "Nome", "empresa": "Empresa", "copia": "Cópia (S/N)"}
 SEM_ANEXO = "(sem anexo)"
+NOVA_CAMPANHA = "(nova campanha)"
+DICAS_MODO_ENVIO = {
+    "outlook": "Usa a conta padrão do Outlook. Para sair pelo subdomínio, escolha outra forma de envio.",
+    "outlook_conta": "A caixa do subdomínio precisa estar adicionada ao Outlook (Arquivo > Adicionar "
+                     "conta). Informe o endereço exato dessa conta em 'E-mail remetente'.",
+    "outlook_enviar_como": "Envia pela conta padrão mostrando De: o endereço do subdomínio. Exige "
+                           "permissão 'Enviar como' no servidor (Exchange / Microsoft 365).",
+    "smtp": "Conecta direto ao servidor de e-mail do subdomínio, sem Outlook. Os e-mails não ficam "
+            "nos Itens Enviados do Outlook: use a Cópia oculta (CCO) para guardar uma cópia.",
+}
 LIMITE_ANEXO_MB = 15
 ROTULO_SITUACAO = {
     PENDENTE: "Pendente", DUPLICADO: "Duplicado", JA_ENVIADO: "Já enviado",
@@ -72,6 +82,30 @@ def _abrir(caminho: Path) -> None:
         webbrowser.open(Path(caminho).resolve().as_uri())
 
 
+def _area_rolavel(pai) -> ttk.Frame:
+    """Moldura com barra de rolagem vertical (telas de notebook baixas)."""
+    fundo = ttk.Style().lookup("TFrame", "background") or None
+    canvas = tk.Canvas(pai, highlightthickness=0, borderwidth=0, background=fundo)
+    barra = ttk.Scrollbar(pai, orient="vertical", command=canvas.yview)
+    interno = ttk.Frame(canvas, padding=8)
+    janela = canvas.create_window((0, 0), window=interno, anchor="nw")
+    interno.bind("<Configure>", lambda e: canvas.configure(scrollregion=canvas.bbox("all")))
+    canvas.bind("<Configure>", lambda e: canvas.itemconfigure(janela, width=e.width))
+    canvas.configure(yscrollcommand=barra.set)
+    canvas.pack(side="left", fill="both", expand=True)
+    barra.pack(side="right", fill="y")
+
+    def rolar(evento):
+        passos = -1 if getattr(evento, "num", 0) == 4 else 1 if getattr(evento, "num", 0) == 5 \
+            else int(-evento.delta / 120)
+        canvas.yview_scroll(passos, "units")
+    interno.bind("<Enter>", lambda e: (canvas.bind_all("<MouseWheel>", rolar),
+                                       canvas.bind_all("<Button-4>", rolar), canvas.bind_all("<Button-5>", rolar)))
+    interno.bind("<Leave>", lambda e: (canvas.unbind_all("<MouseWheel>"),
+                                       canvas.unbind_all("<Button-4>"), canvas.unbind_all("<Button-5>")))
+    return interno
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -80,7 +114,13 @@ class App(tk.Tk):
         self.minsize(980, 680)
 
         migrados = cfgmod.migrar_dados_antigos()
+        try:
+            backup = cfgmod.backup_dados(__version__)
+        except Exception as exc:  # noqa: BLE001 - backup nunca impede de abrir
+            backup = f"falhou: {exc}"
         self.cfg = cfgmod.carregar()
+        self.campanha_ativa = ""  # nome da campanha salva carregada ("" = nenhuma)
+        self._aplicando = False
         self.historico = Historico(ARQUIVO_HISTORICO)
         self.contatos: list[Contato] = []
         self.laminas_disponiveis: list[Path] = []
@@ -95,11 +135,12 @@ class App(tk.Tk):
         self.aba_disparo = ttk.Frame(abas, padding=8)
         self.aba_mensagem = ttk.Frame(abas, padding=8)
         self.aba_enviados = ttk.Frame(abas, padding=8)
-        self.aba_config = ttk.Frame(abas, padding=8)
+        aba_config_externa = ttk.Frame(abas)
         abas.add(self.aba_disparo, text="  Disparo  ")
         abas.add(self.aba_mensagem, text="  Mensagem  ")
         abas.add(self.aba_enviados, text="  Enviados  ")
-        abas.add(self.aba_config, text="  Configurações  ")
+        abas.add(aba_config_externa, text="  Configurações  ")
+        self.aba_config = _area_rolavel(aba_config_externa)
 
         self._montar_disparo()
         self._montar_mensagem()
@@ -107,6 +148,10 @@ class App(tk.Tk):
         self._montar_config()
 
         self._recarregar_campanhas(self.cfg.get("ultima_campanha", ""))
+        self._atualizar_lista_salvas()
+        ultima_salva = self.cfg.get("ultima_campanha_salva", "")
+        if ultima_salva and salvas.obter(self.cfg, ultima_salva):
+            self._aplicar_campanha_salva(ultima_salva, silencioso=True)
         if self.cfg.get("ultima_base") and Path(self.cfg["ultima_base"]).exists():
             self.var_base.set(self.cfg["ultima_base"])
             self._atualizar_abas()
@@ -117,6 +162,10 @@ class App(tk.Tk):
         self._log(f"Disparo de Lâminas versão {__version__} iniciado. Dados em: {PASTA_DADOS}")
         if migrados:
             self._log("Trazidos da pasta do programa para a pasta de dados: " + ", ".join(migrados))
+        if backup:
+            self._log(f"Backup do histórico e das configurações: {backup}")
+        for aviso in cfgmod.avisos_remetente(self.cfg):
+            self._log(f"⚠ Remetente: {aviso}")
         self.after(300, self._processar_eventos)
         self.after(1000, self._relogio)
 
@@ -129,24 +178,37 @@ class App(tk.Tk):
         aba.rowconfigure(1, weight=1)
 
         # -- 1. campanha e lâmina ------------------------------------------
-        f1 = ttk.LabelFrame(aba, text=" 1. Do que se trata a campanha? ", padding=8)
+        f1 = ttk.LabelFrame(aba, text=" 1. Campanha ", padding=8)
         f1.grid(row=0, column=0, sticky="ew")
         f1.columnconfigure(1, weight=1)
 
+        # Campanha salva: lâmina(s) + apresentação + texto, com nome próprio.
         ttk.Label(f1, text="Campanha:").grid(row=0, column=0, sticky="w")
+        linha_salva = ttk.Frame(f1)
+        linha_salva.grid(row=0, column=1, columnspan=2, sticky="ew", padx=4)
+        self.var_salva = tk.StringVar(value=NOVA_CAMPANHA)
+        self.cb_salva = ttk.Combobox(linha_salva, textvariable=self.var_salva, state="readonly", width=40)
+        self.cb_salva.pack(side="left")
+        self.cb_salva.bind("<<ComboboxSelected>>", lambda e: self._ao_escolher_salva())
+        ttk.Button(linha_salva, text="Salvar campanha...", command=self._salvar_campanha).pack(side="left", padx=(8, 2))
+        ttk.Button(linha_salva, text="Excluir", command=self._excluir_campanha).pack(side="left", padx=2)
+        self.lbl_alterada = ttk.Label(linha_salva, text="", foreground="#b00020")
+        self.lbl_alterada.pack(side="left", padx=8)
+
+        ttk.Label(f1, text="Pasta de lâminas:").grid(row=1, column=0, sticky="w", pady=(6, 0))
         self.var_campanha = tk.StringVar()
         self.cb_campanha = ttk.Combobox(f1, textvariable=self.var_campanha, state="readonly", width=30)
-        self.cb_campanha.grid(row=0, column=1, sticky="w", padx=4)
+        self.cb_campanha.grid(row=1, column=1, sticky="w", padx=4, pady=(6, 0))
         self.cb_campanha.bind("<<ComboboxSelected>>", lambda e: self._ao_trocar_campanha())
         botoes = ttk.Frame(f1)
-        botoes.grid(row=0, column=2, sticky="e")
+        botoes.grid(row=1, column=2, sticky="e", pady=(6, 0))
         ttk.Button(botoes, text="Atualizar pastas",
                    command=lambda: self._recarregar_campanhas(self.var_campanha.get())).pack(side="left", padx=2)
         ttk.Button(botoes, text="Abrir pasta das lâminas", command=self._abrir_pasta_laminas).pack(side="left", padx=2)
 
-        ttk.Label(f1, text="Lâmina(s):").grid(row=1, column=0, sticky="nw", pady=(6, 0))
+        ttk.Label(f1, text="Lâmina(s):").grid(row=2, column=0, sticky="nw", pady=(6, 0))
         lista = ttk.Frame(f1)
-        lista.grid(row=1, column=1, sticky="ew", padx=4, pady=(6, 0))
+        lista.grid(row=2, column=1, sticky="ew", padx=4, pady=(6, 0))
         lista.columnconfigure(0, weight=1)
         self.lst_laminas = tk.Listbox(lista, height=4, selectmode="extended", exportselection=False)
         self.lst_laminas.grid(row=0, column=0, sticky="ew")
@@ -156,22 +218,22 @@ class App(tk.Tk):
         self.lst_laminas.configure(yscrollcommand=sb.set)
 
         opcoes = ttk.Frame(f1)
-        opcoes.grid(row=2, column=1, sticky="w", padx=4)
+        opcoes.grid(row=3, column=1, sticky="w", padx=4)
         self.var_alternar = tk.BooleanVar(value=bool(self.cfg.get("alternar_laminas")))
         ttk.Checkbutton(opcoes, text="Mesclar: alternar entre as lâminas selecionadas a cada envio",
                         variable=self.var_alternar, command=self._ao_trocar_lamina).pack(side="left")
         ttk.Button(opcoes, text="Usar outra imagem...", command=self._escolher_imagem).pack(side="left", padx=8)
 
         self.lbl_lamina = ttk.Label(f1, text="", foreground="#555")
-        self.lbl_lamina.grid(row=3, column=1, sticky="w", padx=4)
+        self.lbl_lamina.grid(row=4, column=1, sticky="w", padx=4)
         self.lbl_preview = ttk.Label(f1)
-        self.lbl_preview.grid(row=1, column=2, rowspan=3, sticky="e", padx=(8, 0))
+        self.lbl_preview.grid(row=2, column=2, rowspan=3, sticky="e", padx=(8, 0))
 
         # Apresentação anexada: segue a campanha (institucional para
         # Corporativo, eventos para Eventos...), mas pode ser trocada.
-        ttk.Label(f1, text="Apresentação\n(anexo):").grid(row=4, column=0, sticky="w", pady=(6, 0))
+        ttk.Label(f1, text="Apresentação\n(anexo):").grid(row=5, column=0, sticky="w", pady=(6, 0))
         linha_anexo = ttk.Frame(f1)
-        linha_anexo.grid(row=4, column=1, columnspan=2, sticky="ew", padx=4, pady=(6, 0))
+        linha_anexo.grid(row=5, column=1, columnspan=2, sticky="ew", padx=4, pady=(6, 0))
         self.var_anexo = tk.StringVar(value=SEM_ANEXO)
         self.cb_anexo = ttk.Combobox(linha_anexo, textvariable=self.var_anexo, state="readonly", width=48)
         self.cb_anexo.pack(side="left")
@@ -275,8 +337,26 @@ class App(tk.Tk):
         ttk.Label(f3, text="Cópia (CC) para:").grid(row=0, column=0, sticky="w")
         self.var_cc = tk.StringVar(value=self.cfg.get("email_copia", ""))
         ttk.Entry(f3, textvariable=self.var_cc, width=40).grid(row=0, column=1, sticky="w", padx=4)
+        # Ritmo do disparo, editável aqui mesmo (também em Configurações).
+        campos3 = ttk.Frame(f3)
+        campos3.grid(row=1, column=0, columnspan=3, sticky="w", pady=(4, 0))
+        ttk.Label(campos3, text="E-mails por dia:").pack(side="left")
+        self.var_limite = tk.StringVar(value=str(self._limite()))
+        self.sp_limite = ttk.Spinbox(campos3, from_=1, to=5000, increment=1, width=6,
+                                     textvariable=self.var_limite, command=self._ao_mudar_ritmo)
+        self.sp_limite.pack(side="left", padx=2)
+        ttk.Label(campos3, text="    Intervalo entre e-mails (minutos):").pack(side="left")
+        self.var_intervalo = tk.StringVar(value=f"{self._intervalo_min():g}")
+        self.sp_intervalo = ttk.Spinbox(campos3, from_=0, to=120, increment=0.5, width=5,
+                                        textvariable=self.var_intervalo, command=self._ao_mudar_ritmo)
+        self.sp_intervalo.pack(side="left", padx=2)
+        for sp in (self.sp_limite, self.sp_intervalo):
+            sp.bind("<Return>", self._ao_mudar_ritmo)
+            sp.bind("<FocusOut>", self._ao_mudar_ritmo)
+        ttk.Label(campos3, text="   (vale para o próximo disparo; também em Configurações)",
+                  foreground="#777").pack(side="left")
         self.lbl_contadores = ttk.Label(f3, text="")
-        self.lbl_contadores.grid(row=1, column=0, columnspan=3, sticky="w", pady=4)
+        self.lbl_contadores.grid(row=2, column=0, columnspan=3, sticky="w", pady=4)
 
         botoes = ttk.Frame(f3)
         botoes.grid(row=0, column=2, sticky="e")
@@ -288,9 +368,9 @@ class App(tk.Tk):
         self.bt_parar.pack(side="left", padx=2)
 
         self.lbl_status = ttk.Label(f3, text="Parado.", font=("Segoe UI", 11, "bold"))
-        self.lbl_status.grid(row=2, column=0, columnspan=3, sticky="w")
+        self.lbl_status.grid(row=3, column=0, columnspan=3, sticky="w")
         self.txt_log = ScrolledText(f3, height=5, state="disabled", font=("Consolas", 9))
-        self.txt_log.grid(row=3, column=0, columnspan=3, sticky="ew", pady=(4, 0))
+        self.txt_log.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(4, 0))
 
     # -- campanha / lâminas -------------------------------------------------
     def _recarregar_campanhas(self, preferida: str = ""):
@@ -318,9 +398,182 @@ class App(tk.Tk):
         if campanha and campanha != self.cfg.get("ultima_campanha"):
             self.cfg["ultima_campanha"] = campanha
             cfgmod.salvar(self.cfg)
-        self._carregar_mensagem_na_tela()
+        if not self.campanha_ativa and not self._aplicando:
+            self._carregar_mensagem_na_tela()
         self._ao_trocar_lamina()
         self._recarregar_anexos()
+
+    # -- campanhas salvas -----------------------------------------------------
+    def _atualizar_lista_salvas(self, selecionar: str = ""):
+        nomes = salvas.listar(self.cfg)
+        self.cb_salva["values"] = [NOVA_CAMPANHA] + nomes
+        self.var_salva.set(selecionar if selecionar in nomes else NOVA_CAMPANHA)
+
+    def _nome_campanha(self) -> str:
+        """Nome que vai para o histórico: a campanha salva ou a pasta."""
+        return self.campanha_ativa or self.var_campanha.get()
+
+    def _estado_atual(self) -> dict:
+        return {
+            "pasta": self.var_campanha.get(),
+            "laminas": [str(p) for p in self._laminas_escolhidas()],
+            "alternar": bool(self.var_alternar.get()),
+            "anexo": "" if self.var_anexo.get() == SEM_ANEXO else self.var_anexo.get(),
+            "mensagem": self._mensagem_atual(),
+        }
+
+    def _marcar_alteracao(self, *_):
+        if self._aplicando or not hasattr(self, "lbl_alterada"):
+            return
+        if not self.campanha_ativa or not hasattr(self, "txt_fim"):
+            self.lbl_alterada.configure(text="")
+            return
+        igual = salvas.mesmo_conteudo(salvas.obter(self.cfg, self.campanha_ativa), self._estado_atual())
+        self.lbl_alterada.configure(text="" if igual else "● alterações não salvas")
+
+    def _ao_escolher_salva(self):
+        nome = self.var_salva.get()
+        if nome == NOVA_CAMPANHA:
+            self.campanha_ativa = ""
+            self.cfg["ultima_campanha_salva"] = ""
+            cfgmod.salvar(self.cfg)
+            self._atualizar_rotulos_mensagem()
+            self._marcar_alteracao()
+            return
+        self._aplicar_campanha_salva(nome)
+
+    def _aplicar_campanha_salva(self, nome: str, silencioso: bool = False):
+        dados = salvas.obter(self.cfg, nome)
+        if not dados:
+            return
+        avisos = []
+        self._aplicando = True
+        try:
+            pasta = dados.get("pasta") or ""
+            if pasta and pasta in self.cb_campanha["values"]:
+                self.var_campanha.set(pasta)
+            elif pasta:
+                avisos.append(f"pasta de lâminas '{pasta}' não encontrada")
+            self._ao_trocar_campanha()
+            encontradas, faltando = salvas.localizar_laminas(dados, self.laminas_disponiveis)
+            self.lst_laminas.selection_clear(0, "end")
+            for p in encontradas:
+                if p not in self.laminas_disponiveis:
+                    self.laminas_disponiveis.append(p)
+                    self.lst_laminas.insert("end", f"{p.name}   (avulsa)")
+                self.lst_laminas.selection_set(self.laminas_disponiveis.index(p))
+            if faltando:
+                avisos.append("lâmina(s) não encontrada(s): " + ", ".join(faltando))
+            self.var_alternar.set(bool(dados.get("alternar")))
+            anexo = dados.get("anexo") or ""
+            if anexo and anexo not in [p.name for p in self.anexos_disponiveis]:
+                avisos.append(f"apresentação '{anexo}' não encontrada")
+                anexo = ""
+            self.var_anexo.set(anexo or SEM_ANEXO)
+            self._mostrar_mensagem(dados.get("mensagem") or cfgmod.mensagem_da_campanha(self.cfg, pasta))
+            self.campanha_ativa = nome
+            self.var_salva.set(nome)
+            self.cfg["ultima_campanha_salva"] = nome
+            cfgmod.salvar(self.cfg)
+        finally:
+            self._aplicando = False
+        self._ao_trocar_anexo(salvar=False)
+        self._ao_trocar_lamina()
+        self._atualizar_rotulos_mensagem()
+        self._marcar_alteracao()
+        self._log(f"Campanha carregada: {nome}" + (f" (atenção: {'; '.join(avisos)})" if avisos else ""))
+        if avisos and not silencioso:
+            messagebox.showwarning("Campanha", f"A campanha '{nome}' foi carregada, mas:\n\n"
+                                   + "\n".join(f"• {a}" for a in avisos)
+                                   + "\n\nAjuste e use 'Salvar campanha...' para atualizar.")
+
+    def _salvar_campanha(self):
+        if self._em_disparo(avisar=True):
+            return
+        if not self._laminas_escolhidas():
+            messagebox.showwarning("Salvar campanha", "Selecione ao menos uma lâmina antes de salvar.")
+            return
+        nome = simpledialog.askstring(
+            "Salvar campanha",
+            "Nome da campanha (ex.: Corporativo - Prazo 70 dias):\n\n"
+            "Guarda a pasta, a(s) lâmina(s), a apresentação e o texto da aba Mensagem.",
+            initialvalue=self.campanha_ativa or self.var_campanha.get(), parent=self)
+        if nome is None:
+            return
+        try:
+            nome = salvas.normalizar_nome(nome)
+        except salvas.NomeInvalido as exc:
+            messagebox.showerror("Salvar campanha", str(exc))
+            return
+        existente = salvas.existente(self.cfg, nome)
+        if existente and existente != self.campanha_ativa and not messagebox.askyesno(
+                "Salvar campanha", f"Já existe a campanha '{existente}'. Substituir pelo que está na tela?"):
+            return
+        nome = salvas.salvar(self.cfg, nome, self._estado_atual())
+        self.cfg["ultima_campanha_salva"] = nome
+        cfgmod.salvar(self.cfg)
+        self.campanha_ativa = nome
+        self._atualizar_lista_salvas(nome)
+        self._atualizar_rotulos_mensagem()
+        self._marcar_alteracao()
+        self._log(f"Campanha salva: {nome}")
+        messagebox.showinfo("Salvar campanha", f"Campanha '{nome}' salva.")
+
+    def _excluir_campanha(self):
+        nome = self.campanha_ativa
+        if not nome:
+            messagebox.showinfo("Excluir campanha", "Escolha na lista 'Campanha' a campanha salva a excluir.")
+            return
+        if not messagebox.askyesno("Excluir campanha", f"Excluir a campanha salva '{nome}'?\n\n"
+                                   "O histórico de envios não é alterado."):
+            return
+        salvas.excluir(self.cfg, nome)
+        self.cfg["ultima_campanha_salva"] = ""
+        cfgmod.salvar(self.cfg)
+        self.campanha_ativa = ""
+        self._atualizar_lista_salvas()
+        self._atualizar_rotulos_mensagem()
+        self._marcar_alteracao()
+        self._log(f"Campanha excluída: {nome}")
+
+    def _oferecer_salvar_campanha(self) -> bool:
+        """Antes do disparo: se a campanha salva foi alterada, oferece salvar.
+        Retorna ``False`` se o usuário cancelar."""
+        nome = self.campanha_ativa
+        if not nome or salvas.mesmo_conteudo(salvas.obter(self.cfg, nome), self._estado_atual()):
+            return True
+        resposta = messagebox.askyesnocancel(
+            "Campanha alterada",
+            f"A campanha '{nome}' tem alterações não salvas (lâmina, apresentação ou texto).\n\n"
+            "Sim = salvar na campanha e continuar\nNão = continuar sem salvar\nCancelar = voltar")
+        if resposta is None:
+            return False
+        if resposta:
+            salvas.salvar(self.cfg, nome, self._estado_atual())
+            cfgmod.salvar(self.cfg)
+            self._marcar_alteracao()
+        return True
+
+    # -- ritmo (e-mails por dia / intervalo) ---------------------------------------
+    def _ao_mudar_ritmo(self, *_):
+        try:
+            limite = int(str(self.var_limite.get()).strip())
+            intervalo = float(str(self.var_intervalo.get()).strip().replace(",", "."))
+            if limite <= 0 or intervalo < 0:
+                raise ValueError
+        except ValueError:
+            self.var_limite.set(str(self._limite()))
+            self.var_intervalo.set(f"{self._intervalo_min():g}")
+            return
+        if limite == self._limite() and intervalo == self._intervalo_min():
+            return
+        self.cfg["limite_diario"], self.cfg["intervalo_minutos"] = limite, intervalo
+        cfgmod.salvar(self.cfg)
+        if hasattr(self, "vars_cfg"):
+            self.vars_cfg["limite_diario"].set(str(limite))
+            self.vars_cfg["intervalo_minutos"].set(f"{intervalo:g}")
+        self._log(f"Ritmo alterado: até {limite} e-mails por dia, {intervalo:g} min entre envios.")
+        self._atualizar_contadores()
 
     # -- apresentação (anexo) -------------------------------------------------
     def _pasta_anexos(self) -> Path | None:
@@ -364,6 +617,7 @@ class App(tk.Tk):
                                      foreground="#b00020")
         else:
             self.lbl_anexo.configure(text="Sem anexo para esta campanha.", foreground="#555")
+        self._marcar_alteracao()
 
     def _abrir_pasta_anexos(self):
         pasta = self._pasta_anexos()
@@ -397,6 +651,7 @@ class App(tk.Tk):
         if bool(self.var_alternar.get()) != bool(self.cfg.get("alternar_laminas")):
             self.cfg["alternar_laminas"] = bool(self.var_alternar.get())
             cfgmod.salvar(self.cfg)
+        self._marcar_alteracao()
 
     def _mostrar_preview(self, caminho: Path | None):
         if caminho is None or Image is None:
@@ -711,6 +966,8 @@ class App(tk.Tk):
             texto += f"  ·  {vao_hoje} sairiam hoje, término previsto ~{fim:%H:%M}"
         if self.cfg.get("modo_simulacao"):
             texto += "  ·  MODO SIMULAÇÃO (nada é enviado)"
+        else:
+            texto += f"  ·  Remetente: {cfgmod.descricao_remetente(self.cfg)}"
         self.lbl_contadores.configure(text=texto)
 
     def _log(self, texto: str):
@@ -828,7 +1085,8 @@ class App(tk.Tk):
         if erro:
             messagebox.showwarning("Disparo", erro)
             return
-        self._oferecer_salvar_mensagem()
+        if not self._oferecer_salvar_campanha():
+            return
 
         sel = self._selecionados()
         restam = self._restam_hoje()
@@ -839,9 +1097,11 @@ class App(tk.Tk):
         fim = datetime.now() + timedelta(minutes=intervalo * (vao - 1))
         com_cc = sum(c.cc for c in sel[:vao])
         reenvios = sum(c.forcar for c in sel[:vao])
-        modo = "SIMULAÇÃO (gera arquivos, nada é enviado)" if self.cfg.get("modo_simulacao") else "OUTLOOK — envio real"
+        modo = ("SIMULAÇÃO (gera arquivos, nada é enviado)" if self.cfg.get("modo_simulacao")
+                else f"ENVIO REAL — {cfgmod.descricao_remetente(self.cfg)}")
+        avisos = [] if self.cfg.get("modo_simulacao") else cfgmod.avisos_remetente(self.cfg)
         resumo = [
-            f"Campanha: {self.var_campanha.get() or '-'}",
+            f"Campanha: {self._nome_campanha() or '-'}",
             "Lâmina(s): " + ", ".join(p.name for p in (laminas if alternar else laminas[:1]))
             + (" (alternando)" if alternar else ""),
             "Anexo: " + (", ".join(p.name for p in self._anexos_escolhidos()) or "nenhum"),
@@ -851,6 +1111,7 @@ class App(tk.Tk):
             f"Reenvios autorizados: {reenvios}" if reenvios else "",
             f"Intervalo: {intervalo:g} min  →  término previsto ~{fim:%H:%M}",
             f"Modo: {modo}",
+            *(f"⚠ {a}" for a in avisos),
         ]
         if not messagebox.askyesno("Confirmar disparo", "\n".join(x for x in resumo if x) + "\n\nConfirma o disparo?"):
             return
@@ -861,7 +1122,7 @@ class App(tk.Tk):
             historico=self.historico,
             criar_enviador=lambda: criar_enviador(cfg, PASTA_SIMULACAO),
             mensagem=self._mensagem_atual(),
-            campanha=self.var_campanha.get(),
+            campanha=self._nome_campanha(),
             laminas=laminas,
             alternar_laminas=alternar,
             anexos=self._anexos_escolhidos(),
@@ -870,15 +1131,19 @@ class App(tk.Tk):
             limite_diario=self._limite(),
             intervalo_seg=intervalo * 60,
             eventos=self.eventos,
+            remetente=("simulação" if self.cfg.get("modo_simulacao")
+                       else cfgmod.descricao_remetente(self.cfg)),
         )
         self.indice_por_contato = {id(c): i for i, c in enumerate(self.contatos)}
         self.total_disparo = vao
         self.feitos_disparo = 0
         self.bt_iniciar.configure(state="disabled")
         self.bt_parar.configure(state="normal")
+        self.sp_limite.configure(state="disabled")
+        self.sp_intervalo.configure(state="disabled")
         manter_pc_acordado(True)
         self._log(f"Disparo iniciado: {vao} e-mail(s), intervalo {intervalo:g} min.")
-        self.lbl_status.configure(text="Abrindo o Outlook...")
+        self.lbl_status.configure(text="Conectando ao envio...")
         self.disparo.start()
         self._atualizar_contadores()
 
@@ -942,6 +1207,8 @@ class App(tk.Tk):
             manter_pc_acordado(False)
             self.bt_iniciar.configure(state="normal")
             self.bt_parar.configure(state="disabled")
+            self.sp_limite.configure(state="normal")
+            self.sp_intervalo.configure(state="normal")
             texto = f"{dados['motivo']} Enviados: {dados['enviados']}. Erros: {dados['erros']}."
             self.lbl_status.configure(text=texto)
             self._log(texto)
@@ -972,6 +1239,7 @@ class App(tk.Tk):
 
         ttk.Label(aba, text="Assunto:").grid(row=2, column=0, sticky="w")
         self.var_assunto = tk.StringVar()
+        self.var_assunto.trace_add("write", self._marcar_alteracao)
         ttk.Entry(aba, textvariable=self.var_assunto).grid(row=3, column=0, sticky="ew")
         ttk.Label(aba, text="Texto de cima (antes da lâmina):").grid(row=4, column=0, sticky="w", pady=(8, 0))
         self.txt_inicio = tk.Text(aba, height=9, wrap="word", font=("Segoe UI", 10), undo=True)
@@ -981,61 +1249,48 @@ class App(tk.Tk):
                   ).grid(row=7, column=0, sticky="w")
         self.txt_fim = tk.Text(aba, height=5, wrap="word", font=("Segoe UI", 10), undo=True)
         self.txt_fim.grid(row=8, column=0, sticky="ew")
+        for texto in (self.txt_inicio, self.txt_fim):
+            texto.bind("<KeyRelease>", self._marcar_alteracao)
         ttk.Label(aba, text=f"Campos que são trocados pelo dado do contato: {CAMPOS_AJUDA}\n"
                             "{saudacao} vira \"bom dia\" (antes das 12h) ou \"boa tarde\".",
                   foreground="#555").grid(row=9, column=0, sticky="w", pady=8)
         botoes = ttk.Frame(aba)
         botoes.grid(row=10, column=0, sticky="w")
-        ttk.Button(botoes, text="Salvar para esta campanha", command=self._salvar_msg_campanha).pack(side="left", padx=2)
+        ttk.Button(botoes, text="Salvar campanha...", command=self._salvar_campanha).pack(side="left", padx=2)
         ttk.Button(botoes, text="Salvar como mensagem padrão", command=self._salvar_msg_padrao).pack(side="left", padx=2)
-        ttk.Button(botoes, text="Voltar a usar a mensagem padrão nesta campanha",
-                   command=self._remover_msg_campanha).pack(side="left", padx=2)
+
+    def _mostrar_mensagem(self, msg: dict):
+        aplicando, self._aplicando = self._aplicando, True
+        try:
+            self.var_assunto.set(msg.get("assunto", ""))
+            for widget, chave in ((self.txt_inicio, "texto_inicio"), (self.txt_fim, "texto_fim")):
+                widget.delete("1.0", "end")
+                widget.insert("1.0", msg.get(chave, ""))
+        finally:
+            self._aplicando = aplicando
 
     def _carregar_mensagem_na_tela(self):
-        campanha = self.var_campanha.get()
-        msg = cfgmod.mensagem_da_campanha(self.cfg, campanha)
-        self.var_assunto.set(msg.get("assunto", ""))
-        for widget, chave in ((self.txt_inicio, "texto_inicio"), (self.txt_fim, "texto_fim")):
-            widget.delete("1.0", "end")
-            widget.insert("1.0", msg.get(chave, ""))
-        self.lbl_msg_campanha.configure(text=f"Campanha: {campanha or '(nenhuma)'}")
-        self.lbl_msg_origem.configure(
-            text="Usando a mensagem própria desta campanha." if cfgmod.tem_mensagem_propria(self.cfg, campanha)
-            else "Usando a mensagem padrão (salve para criar uma mensagem própria desta campanha).")
+        """Texto da pasta (versões antigas) ou o padrão, quando não há
+        campanha salva carregada."""
+        self._mostrar_mensagem(cfgmod.mensagem_da_campanha(self.cfg, self.var_campanha.get()))
+        self._atualizar_rotulos_mensagem()
 
-    def _salvar_msg_campanha(self):
-        campanha = self.var_campanha.get()
-        if not campanha:
-            messagebox.showinfo("Mensagem", "Escolha uma campanha na aba Disparo.")
-            return
-        self.cfg["mensagens"][campanha] = self._mensagem_atual()
-        cfgmod.salvar(self.cfg)
-        self._carregar_mensagem_na_tela()
-        messagebox.showinfo("Mensagem", f"Mensagem salva para a campanha {campanha}.")
+    def _atualizar_rotulos_mensagem(self):
+        self.lbl_msg_campanha.configure(text=f"Campanha: {self._nome_campanha() or '(nenhuma)'}")
+        if self.campanha_ativa:
+            texto = (f"Texto da campanha salva '{self.campanha_ativa}'. Alterou? Use 'Salvar campanha...' "
+                     "para guardar.")
+        elif cfgmod.tem_mensagem_propria(self.cfg, self.var_campanha.get()):
+            texto = "Texto guardado para esta pasta. Use 'Salvar campanha...' para criar uma campanha com ele."
+        else:
+            texto = "Texto padrão. Use 'Salvar campanha...' para guardar este texto numa campanha com nome."
+        self.lbl_msg_origem.configure(text=texto)
 
     def _salvar_msg_padrao(self):
         self.cfg["mensagens"][cfgmod.MENSAGEM_PADRAO] = self._mensagem_atual()
         cfgmod.salvar(self.cfg)
-        self._carregar_mensagem_na_tela()
+        self._atualizar_rotulos_mensagem()
         messagebox.showinfo("Mensagem", "Mensagem padrão salva.")
-
-    def _remover_msg_campanha(self):
-        campanha = self.var_campanha.get()
-        if cfgmod.tem_mensagem_propria(self.cfg, campanha) and campanha != cfgmod.MENSAGEM_PADRAO:
-            del self.cfg["mensagens"][campanha]
-            cfgmod.salvar(self.cfg)
-        self._carregar_mensagem_na_tela()
-
-    def _oferecer_salvar_mensagem(self):
-        campanha = self.var_campanha.get()
-        if campanha and self._mensagem_atual() != cfgmod.mensagem_da_campanha(self.cfg, campanha):
-            if messagebox.askyesno("Mensagem alterada",
-                                   f"A mensagem foi alterada e não foi salva.\n"
-                                   f"Salvar como mensagem da campanha {campanha}?\n\n"
-                                   "(O disparo usa o texto que está na tela de qualquer forma.)"):
-                self.cfg["mensagens"][campanha] = self._mensagem_atual()
-                cfgmod.salvar(self.cfg)
-                self._carregar_mensagem_na_tela()
 
     # ==================================================================
     # Aba Enviados
@@ -1064,7 +1319,7 @@ class App(tk.Tk):
         colunas = (("data_hora", "Data/Hora", 140), ("empresa", "Empresa", 170), ("nome", "Nome", 170),
                    ("email", "E-mail", 230), ("cc", "Cópia (CC)", 170), ("campanha", "Campanha", 100),
                    ("lamina", "Lâmina", 150), ("anexo", "Anexo", 150), ("status", "Status", 80), ("erro", "Obs./Erro", 200),
-                   ("versao", "Versão", 60))
+                   ("remetente", "Remetente", 170), ("versao", "Versão", 60))
         self.tv_env = ttk.Treeview(quadro, columns=[c for c, _, _ in colunas], show="headings")
         for col, titulo, larg in colunas:
             self.tv_env.heading(col, text=titulo)
@@ -1089,7 +1344,7 @@ class App(tk.Tk):
             self.tv_env.insert("", "end", values=(
                 data, r["empresa"] or "", r["nome"] or "", r["email"], r["cc"] or "",
                 r["campanha"] or "", r["lamina"] or "", r.get("anexo") or "", r["status"], r["erro"] or "",
-                r.get("versao") or ""),
+                r.get("remetente") or "", r.get("versao") or ""),
                 tags=(r["status"],))
         enviados = sum(r["status"] == "Enviado" for r in linhas)
         self.lbl_enviados.configure(
@@ -1177,7 +1432,6 @@ class App(tk.Tk):
             ("intervalo_minutos", "Intervalo entre envios (minutos)", "float"),
             ("email_copia", "E-mail de cópia (CC) — quem recebe cópia nos marcados", "texto"),
             ("copia_oculta", "Cópia oculta (CCO) em todos os envios (opcional)", "texto"),
-            ("conta_outlook", "Conta do Outlook que envia (em branco = conta padrão)", "texto"),
             ("aba_padrao", "Aba padrão da planilha de envio", "texto"),
             ("largura_imagem_px", "Largura máxima da lâmina no e-mail (pixels)", "int"),
             ("incluir_assinatura", "Incluir a assinatura padrão do Outlook", "bool"),
@@ -1198,16 +1452,143 @@ class App(tk.Tk):
                                ).grid(row=linha, column=2, padx=4)
             self.vars_cfg[chave] = var
         self._tipos_cfg = {chave: tipo for chave, _, tipo in campos}
+        self._montar_remetente(aba, linha=len(campos))
 
         botoes = ttk.Frame(aba)
-        botoes.grid(row=len(campos), column=0, columnspan=3, sticky="w", pady=16)
+        botoes.grid(row=len(campos) + 1, column=0, columnspan=3, sticky="w", pady=12)
         ttk.Button(botoes, text="Salvar configurações", command=self._salvar_config).pack(side="left", padx=2)
         ttk.Button(botoes, text="Abrir pasta de dados (histórico / simulação)",
                    command=lambda: (PASTA_DADOS.mkdir(parents=True, exist_ok=True), _abrir(PASTA_DADOS))).pack(side="left", padx=2)
         ttk.Label(aba, foreground="#555", justify="left", text=(
             f"Versão do programa: {__version__}\n"
             f"Histórico de enviados: {ARQUIVO_HISTORICO}\n"
-            f"Configurações: {cfgmod.ARQUIVO_CONFIG}")).grid(row=len(campos) + 1, column=0, columnspan=3, sticky="w")
+            f"Configurações: {cfgmod.ARQUIVO_CONFIG}\n"
+            f"Backups automáticos: {cfgmod.PASTA_BACKUPS}")).grid(row=len(campos) + 2, column=0, columnspan=3,
+                                                                  sticky="w")
+
+    def _montar_remetente(self, aba, linha: int):
+        """Quadro do remetente das prospecções (subdomínio de envio)."""
+        rem = ttk.LabelFrame(aba, text=" Remetente das prospecções (subdomínio) ", padding=8)
+        rem.grid(row=linha, column=0, columnspan=3, sticky="ew", pady=(8, 0))
+        rem.columnconfigure(1, weight=1)
+        self.var_modo_envio = tk.StringVar(value=cfgmod.MODOS_ENVIO[self.cfg.get("modo_envio", "outlook")])
+        ttk.Label(rem, text="Forma de envio:").grid(row=0, column=0, sticky="w", pady=3)
+        cb = ttk.Combobox(rem, textvariable=self.var_modo_envio, state="readonly", width=58,
+                          values=list(cfgmod.MODOS_ENVIO.values()))
+        cb.grid(row=0, column=1, sticky="w")
+        cb.bind("<<ComboboxSelected>>", lambda e: self._atualizar_campos_remetente())
+        self.lbl_dica_envio = ttk.Label(rem, text="", foreground="#555", wraplength=900, justify="left")
+        self.lbl_dica_envio.grid(row=1, column=0, columnspan=3, sticky="w", pady=(0, 4))
+
+        self.vars_rem: dict[str, tk.StringVar] = {}
+        for i, (chave, rotulo, dica) in enumerate((
+            ("subdominio_envio", "Subdomínio de envio:", "ex.: prospeccao.suaempresa.com.br"),
+            ("remetente_email", "E-mail remetente:", "endereço do subdomínio, ex.: comercial@prospeccao.suaempresa.com.br"),
+            ("remetente_nome", "Nome do remetente:", "como aparece para o cliente (SMTP)"),
+            ("responder_para", "Responder para (Reply-To):", "opcional: para onde vão as respostas, ex.: seu e-mail principal"),
+        ), start=2):
+            ttk.Label(rem, text=rotulo).grid(row=i, column=0, sticky="w", pady=3)
+            var = tk.StringVar(value=str(self.cfg.get(chave, "")))
+            ttk.Entry(rem, textvariable=var, width=50).grid(row=i, column=1, sticky="w")
+            ttk.Label(rem, text=dica, foreground="#777").grid(row=i, column=2, sticky="w", padx=6)
+            self.vars_rem[chave] = var
+
+        smtp = ttk.Frame(rem)
+        smtp.grid(row=6, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        self.widgets_smtp: list = []
+
+        def campo(rotulo, chave, largura, coluna, **extra):
+            lbl = ttk.Label(smtp, text=rotulo)
+            lbl.grid(row=0 if coluna < 6 else 1, column=coluna % 6, sticky="w", padx=(0 if coluna % 6 == 0 else 8, 2), pady=2)
+            var = tk.StringVar(value=str(self.cfg.get(chave, "")) if chave != "smtp_senha" else "")
+            ent = ttk.Entry(smtp, textvariable=var, width=largura, **extra)
+            ent.grid(row=0 if coluna < 6 else 1, column=coluna % 6 + 1, sticky="w", pady=2)
+            self.vars_rem[chave] = var
+            self.widgets_smtp.extend([lbl, ent])
+
+        campo("Servidor SMTP:", "smtp_host", 30, 0)
+        campo("Porta:", "smtp_porta", 6, 2)
+        lbl = ttk.Label(smtp, text="Segurança:")
+        lbl.grid(row=0, column=4, sticky="w", padx=(8, 2))
+        self.var_seguranca = tk.StringVar(value=cfgmod.SEGURANCAS_SMTP.get(
+            self.cfg.get("smtp_seguranca", "starttls"), cfgmod.SEGURANCAS_SMTP["starttls"]))
+        cb_seg = ttk.Combobox(smtp, textvariable=self.var_seguranca, state="readonly", width=24,
+                              values=list(cfgmod.SEGURANCAS_SMTP.values()))
+        cb_seg.grid(row=0, column=5, sticky="w")
+        self.widgets_smtp.extend([lbl, cb_seg])
+        campo("Usuário:", "smtp_usuario", 30, 6)
+        campo("Senha:", "smtp_senha", 20, 8, show="•")
+        self.lbl_senha = ttk.Label(smtp, foreground="#777",
+                                   text="(senha salva — deixe em branco para manter)" if self.cfg.get("smtp_senha") else "")
+        self.lbl_senha.grid(row=1, column=4, columnspan=2, sticky="w", padx=8)
+        bt = ttk.Button(smtp, text="Testar conexão SMTP", command=self._testar_smtp)
+        bt.grid(row=2, column=1, sticky="w", pady=4)
+        self.widgets_smtp.append(bt)
+        lbl = ttk.Label(rem, text="Assinatura (SMTP):")
+        lbl.grid(row=7, column=0, sticky="nw", pady=3)
+        self.txt_assinatura = tk.Text(rem, height=3, width=60, wrap="word", font=("Segoe UI", 10))
+        self.txt_assinatura.grid(row=7, column=1, columnspan=2, sticky="w", pady=3)
+        self.txt_assinatura.insert("1.0", self.cfg.get("assinatura_smtp", ""))
+        self.widgets_smtp.extend([lbl, self.txt_assinatura])
+        self.lbl_avisos_rem = ttk.Label(rem, text="", foreground="#b00020", wraplength=900, justify="left")
+        self.lbl_avisos_rem.grid(row=8, column=0, columnspan=3, sticky="w")
+        self._atualizar_campos_remetente()
+
+    def _modo_escolhido(self) -> str:
+        rotulo = self.var_modo_envio.get()
+        return next((k for k, v in cfgmod.MODOS_ENVIO.items() if v == rotulo), "outlook")
+
+    def _atualizar_campos_remetente(self):
+        modo = self._modo_escolhido()
+        self.lbl_dica_envio.configure(text=DICAS_MODO_ENVIO[modo])
+        estado = "normal" if modo == "smtp" else "disabled"
+        for w in self.widgets_smtp:
+            try:
+                w.configure(state=estado)
+            except tk.TclError:
+                pass
+        avisos = cfgmod.avisos_remetente(self.cfg)
+        self.lbl_avisos_rem.configure(text="\n".join(f"⚠ {a}" for a in avisos))
+
+    def _dados_remetente(self) -> dict:
+        """Campos do quadro do remetente, validados. Levanta ValueError."""
+        modo = self._modo_escolhido()
+        dados = {chave: var.get().strip() for chave, var in self.vars_rem.items()}
+        dados["modo_envio"] = modo
+        dados["subdominio_envio"] = cfgmod.normalizar_subdominio(dados["subdominio_envio"])
+        dados["smtp_seguranca"] = next((k for k, v in cfgmod.SEGURANCAS_SMTP.items()
+                                        if v == self.var_seguranca.get()), "starttls")
+        dados["assinatura_smtp"] = self.txt_assinatura.get("1.0", "end-1c")
+        try:
+            dados["smtp_porta"] = int(dados["smtp_porta"] or 587)
+        except ValueError:
+            raise ValueError("Porta SMTP inválida.") from None
+        senha = dados.pop("smtp_senha")
+        dados["smtp_senha"] = segredo.proteger(senha) if senha else self.cfg.get("smtp_senha", "")
+        for chave, rotulo in (("remetente_email", "E-mail remetente"), ("responder_para", "Responder para")):
+            for endereco in [x.strip() for x in dados[chave].replace(",", ";").split(";") if x.strip()]:
+                if not email_valido(endereco):
+                    raise ValueError(f"{rotulo} inválido: {endereco}")
+        if modo != "outlook" and not dados["remetente_email"]:
+            raise ValueError("Informe o e-mail remetente do subdomínio.")
+        return dados
+
+    def _testar_smtp(self):
+        try:
+            dados = self._dados_remetente()
+            enviador = EnviadorSMTP(
+                host=dados["smtp_host"], porta=dados["smtp_porta"], seguranca=dados["smtp_seguranca"],
+                usuario=dados["smtp_usuario"], senha=segredo.revelar(dados["smtp_senha"]),
+                remetente_email=dados["remetente_email"], timeout=20)
+            self.configure(cursor="watch")
+            self.update_idletasks()
+            resultado = enviador.testar()
+        except (ValueError, ErroEnvio) as exc:
+            messagebox.showerror("Testar conexão SMTP", str(exc))
+            return
+        finally:
+            self.configure(cursor="")
+        messagebox.showinfo("Testar conexão SMTP", resultado)
 
     def _salvar_config(self):
         novo = {}
@@ -1234,6 +1615,17 @@ class App(tk.Tk):
             if any(not email_valido(x) for x in enderecos):
                 messagebox.showerror("Configurações", f"E-mail inválido em '{chave}'.")
                 return
+        try:
+            remetente = self._dados_remetente()
+        except ValueError as exc:
+            messagebox.showerror("Configurações", str(exc))
+            return
+        teste = {**self.cfg, **novo, **remetente}
+        avisos = cfgmod.avisos_remetente(teste)
+        if avisos and not messagebox.askyesno(
+                "Remetente", "\n".join(f"⚠ {a}" for a in avisos) + "\n\nSalvar mesmo assim?"):
+            return
+        novo.update(remetente)
         pasta_mudou = (novo["pasta_laminas"] != self.cfg.get("pasta_laminas")
                        or novo["pasta_anexos"] != self.cfg.get("pasta_anexos"))
         copia_mudou = novo["email_copia"] != self.cfg.get("email_copia")
@@ -1241,8 +1633,17 @@ class App(tk.Tk):
         cfgmod.salvar(self.cfg)
         if copia_mudou and self.var_cc.get().strip() != novo["email_copia"]:
             self.var_cc.set(novo["email_copia"])
+        for chave, var in self.vars_rem.items():
+            var.set("" if chave == "smtp_senha" else str(self.cfg.get(chave, "")))
+        self.lbl_senha.configure(text="(senha salva — deixe em branco para manter)"
+                                 if self.cfg.get("smtp_senha") else "")
+        self.var_limite.set(str(self._limite()))
+        self.var_intervalo.set(f"{self._intervalo_min():g}")
+        self._atualizar_campos_remetente()
         if pasta_mudou:
             self._recarregar_campanhas(self.var_campanha.get())
+            if self.campanha_ativa:
+                self._aplicar_campanha_salva(self.campanha_ativa)
         self._atualizar_contadores()
         messagebox.showinfo("Configurações", "Configurações salvas.")
 

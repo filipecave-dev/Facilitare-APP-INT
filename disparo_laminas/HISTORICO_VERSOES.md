@@ -4,6 +4,29 @@ A versão aparece no título da janela, na aba Configurações, no nome do pacot
 (`disparo_laminas_vX.Y.Z.zip`) e na coluna **Versão** de cada envio registrado
 na aba Enviados.
 
+## 1.7.0 — 30/10/2026
+- **Campanhas salvas:** lista "Campanha" no quadro 1 para escolher e botão
+  **Salvar campanha...**, que pede o nome. Cada campanha guarda a pasta, a(s)
+  lâmina(s), o "Mesclar", a apresentação e o texto (assunto, texto de cima e
+  de baixo). Botão **Excluir**. Aviso "● alterações não salvas" e, antes do
+  disparo, oferta de salvar as alterações. A última campanha usada abre
+  carregada. O histórico registra o nome da campanha salva.
+- **Ritmo na tela de disparo:** "E-mails por dia" e "Intervalo entre e-mails"
+  editáveis no quadro 3 (também em Configurações).
+- **Subdomínio de envio:** quadro "Remetente das prospecções" em
+  Configurações, com 4 formas de envio: conta padrão do Outlook, conta do
+  subdomínio cadastrada no Outlook, Outlook "enviar como" o endereço do
+  subdomínio, ou **SMTP direto** no servidor do subdomínio (servidor, porta,
+  segurança, usuário, senha protegida pelo Windows, assinatura e botão
+  "Testar conexão SMTP"). "Responder para" opcional. Avisos quando o
+  remetente não é do subdomínio. O histórico registra o remetente de cada
+  envio.
+- A configuração antiga "Conta do Outlook que envia" vira automaticamente a
+  forma "conta do subdomínio cadastrada no Outlook".
+- **Backup automático** do histórico e das configurações ao abrir (um por dia
+  e a cada versão nova), em `backups`, guardando os 30 mais recentes.
+- Aba Configurações com barra de rolagem.
+
 ## 1.6.0 — 27/10/2026
 - **Dados fora da pasta do programa:** configurações (`config.json`),
   histórico de enviados e simulações passam a ficar em

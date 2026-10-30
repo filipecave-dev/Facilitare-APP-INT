@@ -76,6 +76,9 @@ def _paragrafos(texto: str) -> str:
     return f'<p style="{_ESTILO};margin:0 0 12px 0">{corpo}</p>\n'
 
 
+paragrafos_html = _paragrafos
+
+
 def dimensoes_imagem(caminho: Path) -> Optional[tuple[int, int]]:
     """(largura, altura) de PNG/GIF/JPEG lendo só o cabeçalho do arquivo."""
     try:

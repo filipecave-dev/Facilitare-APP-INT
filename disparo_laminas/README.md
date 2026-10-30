@@ -1,16 +1,18 @@
 # Disparo de Lâminas
 
 Programa em Python que substitui a macro **Macro_Laminas** (Excel/VBA) no
-envio das lâminas de prospecção pelo **Outlook**. Roda no seu PC (Windows),
-com uma tela simples.
+envio das lâminas de prospecção — pelo **Outlook** ou direto pelo servidor de
+e-mail do **subdomínio de prospecção** (SMTP). Roda no seu PC (Windows), com
+uma tela simples.
 
 ## O que ele faz
 
-1. **Pergunta do que se trata a campanha** (corporativo, eventos, incentivo…)
-   e, a partir dela, mostra as lâminas daquela campanha e carrega a mensagem
-   da campanha. Dá para escolher uma lâmina ou **mesclar várias** (cada envio
-   usa a próxima, em rodízio). A **apresentação da campanha vai como anexo**:
-   a institucional para Corporativo, a de eventos para Eventos (veja abaixo).
+1. **Campanhas salvas**: você monta a campanha (pasta de lâminas, lâmina(s),
+   apresentação anexada e texto) e clica em **Salvar campanha...**, dando um
+   nome (ex.: "Corporativo - Prazo 70 dias"). Depois é só escolher na lista
+   **Campanha** e tudo é carregado. Dá para escolher uma lâmina ou **mesclar
+   várias** (cada envio usa a próxima, em rodízio). A **apresentação vai como
+   anexo**: a institucional para Corporativo, a de eventos para Eventos.
 2. **Lê a lista de envio** de uma planilha (`.xlsx`, `.xlsm` ou `.csv`) — pode
    ser a própria aba "A ENVIAR" da macro. As colunas de **Nome**, **Empresa** e
    **E-mail** são encontradas pelo título, **em qualquer ordem** (aceita também
@@ -30,21 +32,62 @@ com uma tela simples.
    O e-mail da cópia (ex.: Ricardo) fica no quadro 3 e nas Configurações.
 5. **Dispara respeitando as regras**: no máximo **80 por dia** (conta também o
    que já saiu mais cedo no mesmo dia) e **3 minutos** entre um e-mail e outro.
+   Os dois números são editáveis no próprio quadro 3 ("E-mails por dia" e
+   "Intervalo entre e-mails") ou em Configurações.
    A tela mostra a contagem para o próximo envio; o botão **Parar** interrompe
    a qualquer momento (quem não foi enviado continua pendente).
 6. **Registra tudo na aba Enviados** (data/hora, contato, cópia, campanha,
-   lâmina, status). Dá para buscar, **exportar para Excel** e **importar os
+   lâmina, apresentação, remetente, status, versão). Dá para buscar, **exportar para Excel** e **importar os
    envios antigos** (abas RELATORIO / BASE-ENVIADO da macro) para que entrem no
    controle de duplicados.
 
 Tudo é editável: limite diário, intervalo, e-mail de cópia, cópia oculta,
-conta do Outlook, pasta das lâminas, largura da imagem, assunto e textos
-(por campanha ou padrão).
+remetente/subdomínio, pasta das lâminas, largura da imagem, assunto e textos
+(por campanha salva ou padrão).
+
+## Campanhas salvas
+
+No quadro **1. Campanha** da aba Disparo:
+
+1. Escolha a **Pasta de lâminas**, selecione a(s) lâmina(s) e a
+   **Apresentação**; na aba **Mensagem**, ajuste assunto e textos.
+2. Clique em **Salvar campanha...** e digite o nome. Se o nome já existir, o
+   programa pergunta se deve substituir.
+3. Para usar depois, escolha a campanha na lista **Campanha**. A última usada
+   já abre carregada.
+
+Se você mudar algo de uma campanha carregada, aparece **● alterações não
+salvas**; antes do disparo o programa oferece salvar. **Excluir** apaga só a
+campanha salva — o histórico de envios não é alterado. O nome da campanha
+fica registrado em cada envio da aba Enviados.
+
+## Remetente das prospecções (subdomínio)
+
+Em **Configurações → Remetente das prospecções**, escolha a forma de envio:
+
+| Forma de envio | Quando usar | O que precisa |
+|---|---|---|
+| Outlook — conta padrão | como era antes | nada |
+| Outlook — conta do subdomínio | a caixa do subdomínio está no Outlook | adicionar a conta no Outlook (Arquivo › Adicionar conta) e informar o endereço em *E-mail remetente* |
+| Outlook — enviar como | Exchange / Microsoft 365 com permissão "Enviar como" | a permissão no servidor e o endereço em *E-mail remetente* |
+| SMTP direto | o subdomínio tem servidor de e-mail próprio | servidor, porta, segurança, usuário e senha do SMTP (use **Testar conexão SMTP**) |
+
+- **Subdomínio de envio** (ex.: `prospeccao.tivolitur.com.br`): o programa
+  avisa se o remetente não for desse subdomínio ou se a forma de envio for a
+  conta padrão.
+- **Responder para** (opcional): para onde vão as respostas dos clientes —
+  por exemplo, o seu e-mail do domínio principal.
+- No **SMTP**, a senha fica protegida pelo Windows (só o seu usuário, neste
+  computador, consegue ler), a assinatura do Outlook não entra (preencha
+  **Assinatura (SMTP)**) e os e-mails não aparecem nos Itens Enviados do
+  Outlook — use a **Cópia oculta (CCO)** se quiser guardar uma cópia.
+- Para o subdomínio ter boa entrega, ele precisa de SPF, DKIM e DMARC
+  configurados no DNS (com quem administra o domínio/servidor de e-mail).
 
 ## Versão
 
 A versão em uso aparece no título da janela (ex.: *Disparo de Lâminas — versão
-1.6.0*) e em cada envio da aba Enviados. O que mudou em cada versão está em
+1.7.0*) e em cada envio da aba Enviados. O que mudou em cada versão está em
 [HISTORICO_VERSOES.md](HISTORICO_VERSOES.md).
 
 ## Instalação (uma vez)
@@ -140,7 +183,10 @@ endereço na barra do Explorer, ou use Configurações → *Abrir pasta de dados
 - `simulacao\` — e-mails gerados no modo simulação.
 
 **Não apague essa pasta**: é ela que impede reenviar para quem já recebeu.
-Faça backup dela de vez em quando ou use **Exportar para Excel**.
+O programa faz **backup automático** do histórico e das configurações ao
+abrir (um por dia e a cada versão nova) em `backups\`, guardando os 30 mais
+recentes. Para restaurar, copie o arquivo do backup de volta para a pasta de
+dados com o programa fechado.
 
 ## Para desenvolvedores
 

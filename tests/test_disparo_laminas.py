@@ -561,3 +561,193 @@ def test_dados_ficam_fora_da_pasta_do_programa_e_migram(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("DISPARO_LAMINAS_DADOS")
         importlib.reload(cfgmod)
+
+
+# -- 1.7.0: campanhas salvas, remetente/subdomínio, backup ------------------------
+
+def test_campanhas_salvas_salvar_listar_comparar_excluir(tmp_path):
+    from laminas import salvas
+    cfg = cfgmod.carregar(tmp_path / "c.json")
+    lamina = tmp_path / "CORPORATIVO" / "prazo70.jpeg"
+    lamina.parent.mkdir()
+    lamina.write_bytes(PNG_1x1)
+    estado = {"pasta": "CORPORATIVO", "laminas": [lamina], "alternar": False,
+              "anexo": "Institucional.pdf",
+              "mensagem": {"assunto": "Oi {nome}", "texto_inicio": "a", "texto_fim": "b"}}
+    nome = salvas.salvar(cfg, "  Corporativo   Prazo 70  ", estado)
+    assert nome == "Corporativo Prazo 70" and salvas.listar(cfg) == [nome]
+    assert salvas.existente(cfg, "corporativo prazo 70") == nome
+    assert salvas.mesmo_conteudo(salvas.obter(cfg, nome), estado)
+    assert not salvas.mesmo_conteudo(salvas.obter(cfg, nome), {**estado, "anexo": ""})
+    # mesmo nome com outra caixa substitui em vez de duplicar
+    salvas.salvar(cfg, "CORPORATIVO PRAZO 70", {**estado, "alternar": True})
+    assert salvas.listar(cfg) == [nome] and salvas.obter(cfg, nome)["alternar"] is True
+    # gravada no config.json e lida de volta
+    cfgmod.salvar(cfg, tmp_path / "c.json")
+    assert salvas.listar(cfgmod.carregar(tmp_path / "c.json")) == [nome]
+    for invalido in ("", "   ", "(nova campanha)", "x" * 61):
+        with pytest.raises(salvas.NomeInvalido):
+            salvas.normalizar_nome(invalido)
+    salvas.excluir(cfg, nome)
+    assert salvas.listar(cfg) == []
+
+
+def test_campanha_salva_acha_lamina_que_mudou_de_pasta(tmp_path):
+    from laminas import salvas
+    nova = tmp_path / "novo_lugar" / "prazo70.jpeg"
+    nova.parent.mkdir()
+    nova.write_bytes(PNG_1x1)
+    salva = {"laminas": [str(tmp_path / "antigo" / "prazo70.jpeg"), str(tmp_path / "sumiu.jpeg")]}
+    encontradas, faltando = salvas.localizar_laminas(salva, [nova])
+    assert encontradas == [nova] and faltando == ["sumiu.jpeg"]
+
+
+def test_senha_smtp_nao_fica_em_texto_puro():
+    from laminas import segredo
+    protegida = segredo.proteger("minha-senha")
+    assert "minha-senha" not in protegida and segredo.revelar(protegida) == "minha-senha"
+    assert segredo.proteger("") == "" and segredo.revelar("legado") == "legado"
+
+
+def test_config_antiga_com_conta_outlook_vira_modo_conta(tmp_path):
+    caminho = tmp_path / "c.json"
+    caminho.write_text('{"conta_outlook": "comercial@prospeccao.x.com.br"}', encoding="utf-8")
+    cfg = cfgmod.carregar(caminho)
+    assert cfg["modo_envio"] == "outlook_conta"
+    assert cfg["remetente_email"] == "comercial@prospeccao.x.com.br"
+    assert cfgmod.descricao_remetente(cfg) == "comercial@prospeccao.x.com.br (Outlook, conta)"
+    assert cfgmod.carregar(tmp_path / "nao-existe.json")["modo_envio"] == "outlook"
+
+
+def test_avisos_de_subdominio():
+    base = dict(cfgmod.DEFAULTS)
+    assert cfgmod.normalizar_subdominio(" https://Prospeccao.X.com.br/ ") == "prospeccao.x.com.br"
+    ok = {**base, "modo_envio": "outlook_conta", "subdominio_envio": "prospeccao.x.com.br",
+          "remetente_email": "ana@prospeccao.x.com.br"}
+    assert cfgmod.avisos_remetente(ok) == []
+    fora = {**ok, "remetente_email": "ana@x.com.br"}
+    assert any("não é do subdomínio" in a for a in cfgmod.avisos_remetente(fora))
+    padrao = {**ok, "modo_envio": "outlook"}
+    assert any("NÃO sairão pelo subdomínio" in a for a in cfgmod.avisos_remetente(padrao))
+    smtp = {**ok, "modo_envio": "smtp"}
+    assert any("SMTP sem servidor, usuário, senha" in a for a in cfgmod.avisos_remetente(smtp))
+
+
+class _SMTPFalso:
+    """Servidor SMTP falso: guarda as mensagens enviadas."""
+    enviados: list = []
+    ultimo = None
+
+    def __init__(self, host, porta, timeout=None, context=None):
+        self.host, self.porta, self.tls, self.logado = host, porta, False, None
+        _SMTPFalso.ultimo = self
+
+    def ehlo(self):
+        pass
+
+    def starttls(self, context=None):
+        self.tls = True
+
+    def login(self, usuario, senha):
+        if senha != "certa":
+            import smtplib
+            raise smtplib.SMTPAuthenticationError(535, b"auth failed")
+        self.logado = usuario
+
+    def send_message(self, msg, from_addr=None, to_addrs=None):
+        _SMTPFalso.enviados.append((msg, from_addr, list(to_addrs)))
+
+    def noop(self):
+        return (250, b"ok")
+
+    def quit(self):
+        pass
+
+    def close(self):
+        pass
+
+
+def test_envio_smtp_pelo_subdominio(tmp_path, monkeypatch):
+    import smtplib
+    from laminas.envio import EnviadorSMTP, ErroEnvio, criar_enviador
+    from laminas import segredo
+    monkeypatch.setattr(smtplib, "SMTP", _SMTPFalso)
+    _SMTPFalso.enviados = []
+    img = tmp_path / "lamina.png"
+    img.write_bytes(PNG_1x1)
+    pdf = tmp_path / "Institucional.pdf"
+    pdf.write_bytes(b"%PDF-1.4")
+    cfg = {**cfgmod.DEFAULTS, "modo_envio": "smtp", "smtp_host": "smtp.prospeccao.x.com.br",
+           "smtp_porta": 587, "smtp_seguranca": "starttls", "smtp_usuario": "comercial",
+           "smtp_senha": segredo.proteger("certa"), "remetente_email": "comercial@prospeccao.x.com.br",
+           "remetente_nome": "Filipe | Tivolitur", "responder_para": "filipe@x.com.br",
+           "assinatura_smtp": "Filipe Veronezzi\nTivolitur"}
+    enviador = criar_enviador(cfg, tmp_path / "sim")
+    assert isinstance(enviador, EnviadorSMTP)
+    c = Contato(2, "Acme", "Ana", "ana@acme.com", cc=True)
+    email = montar(c, {"assunto": "Oi {nome}", "texto_inicio": "Olá {nome}", "texto_fim": "Até"},
+                   imagem=img, cc="ricardo@x.com", cco="arquivo@x.com", anexos=[pdf])
+    assert enviador.enviar(email) == ""
+    msg, de, para = _SMTPFalso.enviados[0]
+    assert _SMTPFalso.ultimo.tls and _SMTPFalso.ultimo.logado == "comercial"
+    assert de == "comercial@prospeccao.x.com.br"
+    assert para == ["ana@acme.com", "ricardo@x.com", "arquivo@x.com"]  # CCO só no envelope
+    assert "Bcc" not in msg and msg["Cc"] == "ricardo@x.com" and msg["Reply-To"] == "filipe@x.com.br"
+    assert msg["From"] == "Filipe | Tivolitur <comercial@prospeccao.x.com.br>"
+    assert msg["Message-ID"].endswith("@prospeccao.x.com.br>")
+    html = msg.get_body(preferencelist=("html",)).get_content()
+    assert "Olá Ana" in html and "cid:" in html and "Filipe Veronezzi" in html
+    inline = [p for p in msg.walk() if p.get("Content-ID")]
+    assert inline and f"cid:{inline[0]['Content-ID'][1:-1]}" in html
+    anexos = [p.get_filename() for p in msg.iter_attachments()]
+    assert "Institucional.pdf" in anexos
+    # senha errada -> mensagem clara
+    cfg["smtp_senha"] = segredo.proteger("errada")
+    with pytest.raises(ErroEnvio, match="recusou o usuário/senha"):
+        criar_enviador(cfg, tmp_path / "sim").enviar(email)
+    with pytest.raises(ErroEnvio, match="sem servidor"):
+        criar_enviador({**cfg, "smtp_host": ""}, tmp_path / "sim")
+
+
+def test_outlook_enviar_como_e_responder_para():
+    from laminas.envio import EnviadorOutlook
+    e, criados = _outlook_falso(exigir_janela=False)
+    e.enviar_como, e.responder_para = "comercial@prospeccao.x.com.br", "filipe@x.com.br"
+
+    class _Respostas:
+        def __init__(self):
+            self.lista = []
+
+        def Add(self, endereco):
+            self.lista.append(endereco)
+    _MailFalso.ReplyRecipients = _Respostas()
+    try:
+        from laminas.mensagem import Email
+        e.enviar(Email(para="a@a.com", assunto="Oi", texto_inicio="Olá", texto_fim=""))
+        assert criados[0].SentOnBehalfOfName == "comercial@prospeccao.x.com.br"
+        assert _MailFalso.ReplyRecipients.lista == ["filipe@x.com.br"]
+    finally:
+        del _MailFalso.ReplyRecipients
+
+
+def test_backup_diario_e_por_versao_preserva_historico(tmp_path):
+    from datetime import datetime as dt
+    dados = tmp_path / "dados"
+    h = Historico(dados / "historico_envios.db")
+    h.registrar(email="ja@enviado.com")
+    cfgmod.salvar({"limite_diario": 50}, dados / "config.json")
+    b1 = cfgmod.backup_dados("1.7.0", dados, agora=dt(2026, 10, 30, 9))
+    assert b1 and Historico(b1 / "historico_envios.db").data_envio("ja@enviado.com") is not None
+    assert (b1 / "config.json").exists()
+    assert cfgmod.backup_dados("1.7.0", dados, agora=dt(2026, 10, 30, 15)) is None  # mesmo dia/versão
+    assert cfgmod.backup_dados("1.7.1", dados, agora=dt(2026, 10, 30, 16)) is not None  # versão nova
+    from datetime import timedelta
+    for dia in range(40):  # um backup por dia: mantém só os mais recentes
+        cfgmod.backup_dados("1.7.1", dados, agora=dt(2026, 11, 1, 9) + timedelta(days=dia))
+    pastas = sorted(p.name for p in (dados / "backups").iterdir() if p.is_dir())
+    assert len(pastas) == cfgmod.MAX_BACKUPS and pastas[-1].startswith("20261210")
+
+
+def test_historico_registra_remetente(hist):
+    hist.registrar(email="a@a.com", remetente="comercial@prospeccao.x.com.br (SMTP)")
+    assert hist.listar()[0]["remetente"] == "comercial@prospeccao.x.com.br (SMTP)"

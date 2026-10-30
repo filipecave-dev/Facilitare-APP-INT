@@ -12,4 +12,4 @@ Substitui a macro ``Macro_Laminas`` (Excel/VBA) por um programa em Python:
 
 # Versão do programa: aparece no título da janela, no nome do pacote (zip) e em
 # cada envio registrado. Suba a cada entrega e descreva em HISTORICO_VERSOES.md.
-__version__ = "1.6.0"
+__version__ = "1.7.0"

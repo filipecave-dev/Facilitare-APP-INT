@@ -38,7 +38,8 @@ class Disparo(threading.Thread):
                  criar_enviador: Callable[[], object], mensagem: dict, campanha: str,
                  laminas: list[Path], alternar_laminas: bool, email_copia: str,
                  copia_oculta: str, limite_diario: int, intervalo_seg: float,
-                 eventos: "queue.Queue", anexos: Optional[list[Path]] = None, agora: Callable[[], datetime] = datetime.now,
+                 eventos: "queue.Queue", anexos: Optional[list[Path]] = None,
+                 remetente: str = "", agora: Callable[[], datetime] = datetime.now,
                  relogio: Callable[[], float] = time.monotonic):
         super().__init__(daemon=True, name="disparo-laminas")
         self.contatos = list(contatos)
@@ -49,6 +50,7 @@ class Disparo(threading.Thread):
         self.laminas = list(laminas)
         self.alternar_laminas = alternar_laminas
         self.anexos = list(anexos or [])
+        self.remetente = remetente
         self.email_copia = email_copia
         self.copia_oculta = copia_oculta
         self.limite_diario = int(limite_diario)
@@ -114,6 +116,7 @@ class Disparo(threading.Thread):
                             cc=email.cc, campanha=self.campanha,
                             lamina=email.imagem.name if email.imagem else "",
                             anexo=", ".join(a.name for a in email.anexos),
+                            remetente=self.remetente,
                             assunto=email.assunto,
                             data_hora=self.agora().strftime("%Y-%m-%d %H:%M:%S"))
             try:
