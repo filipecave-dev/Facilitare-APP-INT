@@ -751,3 +751,79 @@ def test_backup_diario_e_por_versao_preserva_historico(tmp_path):
 def test_historico_registra_remetente(hist):
     hist.registrar(email="a@a.com", remetente="comercial@prospeccao.x.com.br (SMTP)")
     assert hist.listar()[0]["remetente"] == "comercial@prospeccao.x.com.br (SMTP)"
+
+
+# -- 1.7.1: Outlook na thread da tela, reconexão e modo janela -------------------
+
+def test_disparo_envia_pela_thread_da_tela(hist):
+    import threading
+    import time as _time
+    from laminas.executor import EnviadorNaTela, ExecutorPrincipal
+    executor = ExecutorPrincipal()
+    principal = threading.current_thread()
+    threads_usadas = []
+
+    class _EnviadorDaTela:
+        def __init__(self):
+            threads_usadas.append(threading.current_thread())
+
+        def enviar(self, email):
+            threads_usadas.append(threading.current_thread())
+            if email.para == "falha@a.com":
+                raise RuntimeError("caixa cheia")
+            return ""
+
+    contatos = [Contato(2, "A", "Ana", "ana@a.com", enviar=True),
+                Contato(3, "B", "Bia", "falha@a.com", enviar=True),
+                Contato(4, "C", "Caio", "caio@c.com", enviar=True)]
+    d, fila = _disparo(contatos, hist, None, _Relogio(),
+                       criar_enviador=lambda: EnviadorNaTela(executor, _EnviadorDaTela))
+    d.start()  # o disparo em segundo plano; a "tela" é esta thread
+    limite = _time.monotonic() + 10
+    while d.is_alive() and _time.monotonic() < limite:
+        executor.processar_pendentes()
+        _time.sleep(0.005)
+    assert not d.is_alive()
+    assert threads_usadas and all(t is principal for t in threads_usadas)
+    status = {r["email"]: (r["status"], r["erro"]) for r in hist.listar()}
+    assert status["ana@a.com"][0] == ENVIADO and status["caio@c.com"][0] == ENVIADO
+    assert status["falha@a.com"] == (ERRO, "caixa cheia")
+
+
+def test_outlook_reconecta_quando_a_ligacao_cai():
+    from laminas.mensagem import Email
+    e, criados = _outlook_falso(exigir_janela=False)
+    app_bom = e.app
+
+    class _AppCaido:
+        def CreateItem(self, tipo):
+            raise _ComErro(-2147417848, "O objeto chamado foi desconectado de seus clientes.", None, None)
+    e.app = _AppCaido()
+
+    def _conectar():
+        e.app, e.conta = app_bom, None
+    e._conectar = _conectar
+    obs = e.enviar(Email(para="a@a.com", assunto="Oi", texto_inicio="Olá", texto_fim=""))
+    assert criados[0].enviado and "Outlook reconectado" in obs and "0x80010108" in obs
+
+
+def test_depois_de_um_send_recusado_os_proximos_ja_abrem_a_janela():
+    from laminas.mensagem import Email
+    e, criados = _outlook_falso(exigir_janela=True)
+    email = Email(para="a@a.com", assunto="Oi", texto_inicio="Olá", texto_fim="")
+    tentativas_diretas = []
+    _send = _MailFalso.Send
+
+    def _send_contando(self):
+        if not self.aberto:
+            tentativas_diretas.append(self)
+        return _send(self)
+    _MailFalso.Send = _send_contando
+    try:
+        e.enviar(email)
+        e.enviar(email)
+        e.enviar(email)
+    finally:
+        _MailFalso.Send = _send
+    assert all(m.enviado for m in criados) and e.usar_janela
+    assert len(tentativas_diretas) == 1  # só o 1º tentou o envio direto

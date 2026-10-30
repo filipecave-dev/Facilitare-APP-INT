@@ -43,6 +43,9 @@ _DICAS_COM = {
     0x80040109: "o item já foi enviado ou excluído",
     0x80070005: "acesso negado (o Outlook bloqueou a automação ou o arquivo)",
     0x800CCC0F: "a conexão com o servidor foi interrompida",
+    0x80010108: "a ligação com o Outlook caiu",
+    0x800706BA: "o Outlook foi fechado ou não está respondendo",
+    0x80010001: "o Outlook está ocupado (uma janela ou caixa de diálogo aberta?)",
 }
 
 
@@ -92,8 +95,13 @@ def copia_local(caminho: Path) -> Path:
 
 
 class EnviadorOutlook:
-    """Cria e envia e-mails pelo Outlook. Deve ser criado na thread que vai
-    usá-lo (o COM é inicializado por thread)."""
+    """Cria e envia e-mails pelo Outlook. Deve ser criado e usado na mesma
+    thread, de preferência a da tela (que atende as mensagens do Windows que o
+    COM do Outlook precisa; ver ``executor.py``)."""
+
+    # Depois que o Send direto falha uma vez, os próximos já abrem a janela.
+    usar_janela = False
+    _endereco_conta = ""
 
     def __init__(self, conta: str = "", incluir_assinatura: bool = True, largura_max: int = 560,
                  enviar_como: str = "", responder_para: str = ""):
@@ -101,20 +109,32 @@ class EnviadorOutlook:
             raise ErroEnvio("O envio pelo Outlook só funciona no Windows. "
                             "Ative o modo simulação nas Configurações para testar.")
         try:
-            import pythoncom
-            import win32com.client
+            import pythoncom  # faz parte do pywin32
         except ImportError as exc:
             raise ErroEnvio("Pacote pywin32 não instalado. Rode instalar.bat.") from exc
         pythoncom.CoInitialize()
-        try:
-            self.app = win32com.client.Dispatch("Outlook.Application")
-        except Exception as exc:  # noqa: BLE001 - erro COM com mensagem própria
-            raise ErroEnvio(f"Não foi possível abrir o Outlook: {exc}") from exc
-        self.conta = self._localizar_conta(conta) if conta else None
+        self._endereco_conta = conta
+        self._conectar()
         self.incluir_assinatura = incluir_assinatura
         self.largura_max = largura_max
         self.enviar_como = enviar_como
         self.responder_para = responder_para
+
+    def _conectar(self) -> None:
+        import win32com.client
+        try:
+            self.app = win32com.client.Dispatch("Outlook.Application")
+        except Exception as exc:  # noqa: BLE001 - erro COM com mensagem própria
+            raise ErroEnvio(f"Não foi possível abrir o Outlook: {descrever_erro(exc)}") from exc
+        self.conta = self._localizar_conta(self._endereco_conta) if self._endereco_conta else None
+
+    def _reconectar(self) -> bool:
+        """Refaz a ligação com o Outlook (quando ela cai entre um envio e outro)."""
+        try:
+            self._conectar()
+            return True
+        except ErroEnvio:
+            return False
 
     def _localizar_conta(self, endereco: str):
         contas = self.app.Session.Accounts
@@ -203,22 +223,36 @@ class EnviadorOutlook:
         com "Parâmetro incorreto"; nesse caso faz como a macro antiga: abre a
         janela do e-mail e envia em seguida.
         """
-        mail = self._criar(email)
+        notas = []
+        try:
+            mail = self._criar(email)
+        except ErroEnvio as exc:
+            # A ligação com o Outlook pode ter caído desde o último envio:
+            # reconecta e monta de novo (nada foi enviado ainda).
+            if not self._reconectar():
+                raise
+            mail = self._criar(email)
+            notas.append(f"Outlook reconectado (antes: {exc})")
+        if self.usar_janela:
+            _etapa("abrir o e-mail", mail.Display, False)
+            _etapa("enviar (Send) com a janela aberta", mail.Send)
+            return "; ".join(notas + ["Enviado abrindo a janela do e-mail (como a macro)"])
         try:
             mail.Send()
-            return ""
+            return "; ".join(notas)
         except Exception as exc:  # noqa: BLE001 - tenta como a macro
             erro_direto = descrever_erro(exc)
+        self.usar_janela = True
         try:
             mail.Display(False)
             mail.Send()
-            return "Enviado abrindo a janela do e-mail (como a macro)"
+            return "; ".join(notas + ["Enviado abrindo a janela do e-mail (como a macro)"])
         except Exception:  # noqa: BLE001 - último recurso: e-mail novo
             pass
         mail = self._criar(email)
         _etapa(f"abrir o e-mail (o Send direto falhou: {erro_direto})", mail.Display, False)
         _etapa(f"enviar (Send) — o Send direto também falhou: {erro_direto}", mail.Send)
-        return "Enviado abrindo a janela do e-mail (2ª tentativa)"
+        return "; ".join(notas + ["Enviado abrindo a janela do e-mail (2ª tentativa)"])
 
     def exibir(self, email: Email) -> None:
         """Abre o e-mail pronto no Outlook, sem enviar (pré-visualização)."""

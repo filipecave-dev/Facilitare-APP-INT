@@ -31,6 +31,7 @@ from .campanhas import (CAMPANHA_GERAL, lamina_do_envio, listar_anexos, listar_c
                         listar_laminas, pasta_apresentacoes, sugerir_anexo)
 from .disparo import Disparo
 from .envio import EnviadorSMTP, ErroEnvio, criar_enviador, descrever_erro, manter_pc_acordado
+from .executor import EnviadorNaTela, ExecutorPrincipal
 from .historico import Historico
 from .mensagem import CAMPOS_AJUDA, montar
 
@@ -126,6 +127,9 @@ class App(tk.Tk):
         self.laminas_disponiveis: list[Path] = []
         self.disparo: Disparo | None = None
         self.eventos: queue.Queue = queue.Queue()
+        # O Outlook (COM) roda na thread da tela, que atende as mensagens do
+        # Windows; a thread do disparo só pede e espera (ver executor.py).
+        self.executor = ExecutorPrincipal()
         self.proximo_envio: float | None = None
         self.proximo_contato: Contato | None = None
         self._preview = None
@@ -1120,7 +1124,7 @@ class App(tk.Tk):
         self.disparo = Disparo(
             sel,
             historico=self.historico,
-            criar_enviador=lambda: criar_enviador(cfg, PASTA_SIMULACAO),
+            criar_enviador=self._fabrica_enviador(cfg),
             mensagem=self._mensagem_atual(),
             campanha=self._nome_campanha(),
             laminas=laminas,
@@ -1147,6 +1151,13 @@ class App(tk.Tk):
         self.disparo.start()
         self._atualizar_contadores()
 
+    def _fabrica_enviador(self, cfg: dict):
+        """Outlook: criado e usado na thread da tela. SMTP e simulação podem
+        rodar na thread do disparo (não travam a tela durante a conexão)."""
+        if cfg.get("modo_simulacao") or cfg.get("modo_envio") == "smtp":
+            return lambda: criar_enviador(cfg, PASTA_SIMULACAO)
+        return lambda: EnviadorNaTela(self.executor, lambda: criar_enviador(cfg, PASTA_SIMULACAO))
+
     def _parar(self):
         if self._em_disparo() and messagebox.askyesno(
                 "Parar disparo", "Parar o disparo? Os contatos não enviados continuam pendentes."):
@@ -1157,6 +1168,7 @@ class App(tk.Tk):
         return getattr(self, "indice_por_contato", {}).get(id(contato))
 
     def _processar_eventos(self):
+        self.executor.processar_pendentes()
         try:
             while True:
                 tipo, dados = self.eventos.get_nowait()
@@ -1329,11 +1341,14 @@ class App(tk.Tk):
         sb.grid(row=0, column=1, sticky="ns")
         self.tv_env.configure(yscrollcommand=sb.set)
         self.tv_env.tag_configure("Erro", foreground="#b00020")
+        self.tv_env.bind("<Double-1>", self._detalhe_envio)
+        self._registros_enviados: dict[str, dict] = {}
         self.tv_env.tag_configure("Importado", foreground="#666666")
 
     def _atualizar_enviados(self):
         linhas = self.historico.listar(self.var_busca.get().strip())
         self.tv_env.delete(*self.tv_env.get_children())
+        self._registros_enviados = {str(r["id"]): r for r in linhas}
         for r in linhas:
             data = r["data_hora"] or ""
             if data:
@@ -1341,7 +1356,7 @@ class App(tk.Tk):
                     data = datetime.fromisoformat(data).strftime("%d/%m/%Y %H:%M:%S")
                 except ValueError:
                     pass
-            self.tv_env.insert("", "end", values=(
+            self.tv_env.insert("", "end", iid=str(r["id"]), values=(
                 data, r["empresa"] or "", r["nome"] or "", r["email"], r["cc"] or "",
                 r["campanha"] or "", r["lamina"] or "", r.get("anexo") or "", r["status"], r["erro"] or "",
                 r.get("remetente") or "", r.get("versao") or ""),
@@ -1349,7 +1364,34 @@ class App(tk.Tk):
         enviados = sum(r["status"] == "Enviado" for r in linhas)
         self.lbl_enviados.configure(
             text=f"{len(linhas)} registros · {enviados} enviados por aqui · "
-                 f"hoje: {self.historico.enviados_no_dia()}")
+                 f"hoje: {self.historico.enviados_no_dia()}  ·  duplo clique numa linha mostra o detalhe")
+
+    def _detalhe_envio(self, evento):
+        """Duplo clique: mostra o registro inteiro (o erro não fica cortado)."""
+        r = self._registros_enviados.get(self.tv_env.identify_row(evento.y))
+        if not r:
+            return
+        campos = (("Data/Hora", "data_hora"), ("Status", "status"), ("Empresa", "empresa"),
+                  ("Nome", "nome"), ("E-mail", "email"), ("Cópia (CC)", "cc"),
+                  ("Campanha", "campanha"), ("Lâmina", "lamina"), ("Anexo", "anexo"),
+                  ("Assunto", "assunto"), ("Remetente", "remetente"), ("Versão", "versao"),
+                  ("Obs./Erro", "erro"))
+        texto = "\n".join(f"{rotulo}: {r.get(chave) or '-'}" for rotulo, chave in campos)
+        janela = tk.Toplevel(self)
+        janela.title(f"Envio — {r.get('email')}")
+        janela.transient(self)
+        caixa = ScrolledText(janela, width=90, height=16, wrap="word", font=("Segoe UI", 10))
+        caixa.insert("1.0", texto)
+        caixa.configure(state="disabled")
+        caixa.pack(fill="both", expand=True, padx=8, pady=8)
+
+        def copiar():
+            self.clipboard_clear()
+            self.clipboard_append(texto)
+        botoes = ttk.Frame(janela)
+        botoes.pack(pady=(0, 8))
+        ttk.Button(botoes, text="Copiar", command=copiar).pack(side="left", padx=4)
+        ttk.Button(botoes, text="Fechar", command=janela.destroy).pack(side="left", padx=4)
 
     def _exportar(self):
         destino = filedialog.asksaveasfilename(

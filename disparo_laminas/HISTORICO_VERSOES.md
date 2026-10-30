@@ -4,6 +4,19 @@ A versão aparece no título da janela, na aba Configurações, no nome do pacot
 (`disparo_laminas_vX.Y.Z.zip`) e na coluna **Versão** de cada envio registrado
 na aba Enviados.
 
+## 1.7.1 — 30/10/2026
+- **Correção:** só o 1º e-mail de cada disparo saía; os seguintes davam
+  "Falha ao criar o e-mail no Outlook" e o disparo parava após 3 erros. O
+  Outlook (COM) agora roda na thread da tela, que atende as mensagens do
+  Windows, como a pré-visualização — a thread do disparo só espera os
+  intervalos e pede cada envio.
+- Se a ligação com o Outlook cair entre um envio e outro, o programa
+  reconecta sozinho e monta o e-mail de novo (anotado em Obs.).
+- Quando o envio direto é recusado uma vez, os seguintes já saem abrindo a
+  janela do e-mail (como a macro), sem tentar o envio direto de novo.
+- Aba Enviados: duplo clique numa linha mostra o registro completo (o erro
+  não fica cortado) com botão Copiar.
+
 ## 1.7.0 — 30/10/2026
 - **Campanhas salvas:** lista "Campanha" no quadro 1 para escolher e botão
   **Salvar campanha...**, que pede o nome. Cada campanha guarda a pasta, a(s)
