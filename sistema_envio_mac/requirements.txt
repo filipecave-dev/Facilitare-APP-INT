@@ -1,0 +1,8 @@
+# Sistema de Envio (Mac) — dependências.
+openpyxl>=3.1
+# Senha do SMTP nas Chaves do macOS.
+keyring>=24
+# Certificados para as conexões seguras (o Python do python.org não usa os do sistema).
+certifi
+# Prévia da lâmina na tela.
+Pillow>=10.0

@@ -138,6 +138,14 @@ independente (Windows + Outlook) para o envio das lâminas de prospecção:
 escolha da campanha/lâmina, aviso de e-mails duplicados, limite diário,
 intervalo entre envios, cópia por contato e lista de enviados.
 
+## Sistema de Envio — Mac (projeto separado)
+
+A pasta [`sistema_envio_mac/`](sistema_envio_mac/README.md) traz a versão para
+**macOS** do Disparo de Lâminas, com versão própria: envia por **SMTP** pelo
+subdomínio de prospecção (o Outlook do Mac não permite a automação usada no
+Windows), guarda a senha nas Chaves do macOS e importa os dados do Windows.
+Testes: `cd sistema_envio_mac && python3 -m pytest tests`.
+
 ## Testes
 
 ```bash
